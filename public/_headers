@@ -1,0 +1,13 @@
+# Cache headers for Cloudflare Pages (copied into dist/ by the build).
+#
+# Everything is revalidated before reuse ("no-cache" caches, then asks "still current?"
+# and usually gets a tiny 304), so a deploy shows up at once. The exception is /assets/:
+# Vite names those files by their content hash, so a changed file gets a new name and
+# the old one can be kept for a year without ever going stale.
+
+/*
+  Cache-Control: no-cache
+
+/assets/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
