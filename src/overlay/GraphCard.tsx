@@ -5,7 +5,7 @@ import type {Focus} from './Overlay';
 import {useKepler} from './useKepler';
 import {fmt} from './focusValues';
 import {selectionEntries, type Grain} from './layers';
-import {PAIR_FIELD} from './pair';
+import {dailyColoursOf, isBivariateLayer} from './pair';
 import {Scatter, colouring, focusTest, layoutScatter, placeSeries, useStableCallback, type Box} from './scatter';
 
 type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean; grain: Grain; is3d: boolean; playing: boolean;
@@ -43,13 +43,16 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
   // the map's colouring, so a dot and its place share a colour
   const entries = visState ? selectionEntries(visState, selection, linked, grain, is3d) : [];
   const layer = entries[0]?.layer;
-  const bivariate = vars.length === 2 && layer?.config.colorField?.name === PAIR_FIELD;
+  const bivariate = vars.length === 2 && isBivariateLayer(layer);
+  // the daily pair's colours change with the day; the dots take them place by place
+  const byCode = dailyColoursOf(layer);
+  const codeKey = byCode ? [...byCode.values()].join() : '';
   const ramp: string[] | null = vars.length === 1 || entries[0]?.pairPart ? layer?.config.visConfig?.colorRange?.colors ?? null : null;
 
   const plot = useMemo(() => layoutScatter(places, series, vars.length, box),
     [places, series, vars.length, grain]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const colourOf = useMemo(() => colouring(series, vars.length, bivariate, ramp),
-    [series, vars.length, bivariate, ramp?.join()]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const colourOf = useMemo(() => colouring(series, vars.length, bivariate, ramp, byCode),
+    [series, vars.length, bivariate, ramp?.join(), codeKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = hover ?? focusTest(focus, grain).code;
   const shownPlace = shown ? places.find((p) => p.code === shown) : null;

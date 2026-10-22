@@ -1,6 +1,6 @@
 import {processGeojson, processRowObject} from '@kepler.gl/processors';
 import {geoToH3} from 'h3-js';
-import {SALES_GROUP_KEYS, VARIABLES} from './catalog';
+import {SALES_GROUP_KEYS, VARIABLES, VAR_BY_KEY} from './catalog';
 
 const DONG_KEYS = VARIABLES.filter((x) => x.dataset === 'dong').map((x) => x.key);
 
@@ -84,6 +84,22 @@ function keepAsReal<T extends {fields: any[]; rows: any[][]}>(data: T, names: st
 // Daily weather and card sales per neighbourhood: 422 dongs × 366 days, placed at each
 // dong's centre. 14MB together, so they load the first time a daily variable is shown
 // under Dong detail — until then the district rows stand in. Built straight into kepler's
+
+// The names kepler shows for our columns — in its field pickers, its filters and the map
+// tooltip (kepler reads field.displayName and falls back to the raw name). Variables take
+// their catalog name; the place columns are what kepler's users would call them, so its
+// own tools read "District" and "Neighbourhood" instead of gu_name and dong_code.
+const COLUMN_NAMES: Record<string, string> = {
+  gu_name: 'District', gu_code: 'District code', dong_name: 'Neighbourhood', dong_code: 'Neighbourhood code',
+  date: 'Date', lat: 'Latitude', lng: 'Longitude', h3: 'H3 cell', _geojson: 'Geometry',
+  is_hot: 'Heat day', is_mild: 'Mild day'
+};
+export const displayNameOf = (name: string) => VAR_BY_KEY[name]?.short ?? COLUMN_NAMES[name] ?? name;
+export function withDisplayNames<T extends {fields: any[]}>(table: T): T {
+  table.fields = table.fields.map((f) => ({...f, displayName: displayNameOf(f.name)}));
+  return table;
+}
+
 // field/row form: 154k rows are too many to type-guess.
 export async function loadDongDaily(dongs: Place[]) {
   const [core, file] = await Promise.all([
@@ -115,7 +131,7 @@ export async function loadDongDaily(dongs: Place[]) {
         ...(sales[i] ?? SALES_GROUP_KEYS.map(() => null))]);
     });
   }
-  return {fields, rows};
+  return withDisplayNames({fields, rows});
 }
 
 export async function loadUhus(): Promise<UhusData> {
@@ -180,10 +196,10 @@ export async function loadUhus(): Promise<UhusData> {
 
   return {
     holidays: new Set(guDaily.holidays ?? []),
-    dong: keepAsText(processGeojson(dongFc as any) as any, ['gu_code', 'dong_code']),
-    gu: keepAsText(processGeojson(guFc as any) as any, ['gu_code']),
-    guDaily: keepAsH3(keepAsReal(keepAsText(processRowObject(guRows) as any, ['gu_code']),
-      [...guDaily.fields, ...SALES_GROUP_KEYS]), 'h3'),
+    dong: withDisplayNames(keepAsText(processGeojson(dongFc as any) as any, ['gu_code', 'dong_code'])),
+    gu: withDisplayNames(keepAsText(processGeojson(guFc as any) as any, ['gu_code'])),
+    guDaily: withDisplayNames(keepAsH3(keepAsReal(keepAsText(processRowObject(guRows) as any, ['gu_code']),
+      [...guDaily.fields, ...SALES_GROUP_KEYS]), 'h3')),
     gus: guGeom.map((g) => ({code: g.gu_code, name: g.gu_name, guCode: g.gu_code, guName: g.gu_name,
       bounds: boundsOf(g.geometry), centre: g.centroid})).sort((a, b) => a.name.localeCompare(b.name)),
     dongs: dongGeom.map((d) => ({code: d.dong_code, name: d.dong_name, guCode: d.gu_code, guName: d.gu_name,

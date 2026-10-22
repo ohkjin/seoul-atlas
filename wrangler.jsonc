@@ -1,0 +1,12 @@
+// Static-assets Worker. With this file present, `npx wrangler deploy` uploads
+// dist/ as-is instead of running its auto-setup, which rebuilds the app a
+// second time and runs out of memory on Cloudflare's build machine.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "seoul-atlas",
+  "compatibility_date": "2026-10-19",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

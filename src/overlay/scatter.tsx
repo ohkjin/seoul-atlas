@@ -70,7 +70,10 @@ export function scaleOf(values: number[], from: number, to: number): Scale {
 
 // The dot colours: the bivariate grid (thirds of each variable) when the map shows it,
 // else the map layer's own ramp over A's quantiles, else one neutral ink.
-export function colouring(series: Map<string, number>[], nVars: number, bivariate: boolean, ramp: string[] | null) {
+export function colouring(series: Map<string, number>[], nVars: number, bivariate: boolean, ramp: string[] | null,
+  byCode: Map<string, string> | null = null) {
+  // the daily pair's grid: the map's own colour of the day, place by place
+  if (byCode && nVars === 2) return (code: string) => byCode.get(code) ?? 'var(--ink-3)';
   if (bivariate && nVars === 2) {
     const la = thirdsOf([...series[0].values()]), lb = thirdsOf([...series[1].values()]);
     return (code: string) => {

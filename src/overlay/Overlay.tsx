@@ -6,20 +6,24 @@ import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
 import {useKepler} from './useKepler';
-import {addDataToMap, setFilter, togglePerspective} from '@kepler.gl/actions';
+import {addDataToMap, onLayerClick, setFilter, togglePerspective} from '@kepler.gl/actions';
 import {adaptElevation, drawSelection, layersOnMap, nextSelection, planFor, restylePair, sync3d, syncOrder,
   syncTooltip, type Grain} from './layers';
-import {pairKeysOf} from './pair';
+import {pairKeysOf, recolourDailyPair} from './pair';
 import TopBar, {type PageId} from './TopBar';
 import FocusBlock from './FocusBlock';
 import GraphCard from './GraphCard';
 import Drawer from './Drawer';
 import TimeCard from './TimeCard';
 import Dashboard from './dashboard/Dashboard';
-import SettingsPanel, {restoreSettings} from './SettingsPanel';
+import SettingsPanel, {rememberedAnnotations, restoreSettings} from './SettingsPanel';
+import MapAnnotations, {type Annotations} from './MapAnnotations';
 import DataPage from './pages/DataPage';
 import AboutPage from './pages/AboutPage';
 import {useUiScale} from './uiScale';
+import {enterSandbox, leaveSandbox} from './sandbox';
+import SandboxBar from './SandboxBar';
+import {showDongOutline} from './outline';
 
 export type Focus = {level: 'seoul'} | {level: 'gu'; gu: Place} | {level: 'dong'; gu: Place; dong: Place};
 
@@ -52,8 +56,12 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // the top bar's other tabs: a page covering the map (Data, About), and the settings panel
   const [page, setPage] = useState<PageId>('map');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // gu and dong names and dashed boundaries over the map (Settings → Map layers)
+  const [annotations, setAnnotations] = useState<Annotations>(rememberedAnnotations);
   const closePage = useStableClose(() => setPage('map'));
   const closeSettings = useStableClose(() => setSettingsOpen(false));
+  // Sandbox: the map is kepler's alone — every atlas effect below stands aside (sandbox.ts)
+  const sandbox = page === 'sandbox';
   const setGrain = (g: Grain) => setGrainState(g);   // drawSelection redraws for the new grain
   const [headline, setHeadlineState] = useState(initialHeadline);
   const setHeadline = (theme: ThemeKey, key: string) => setHeadlineState((h) => ({...h, [theme]: key}));
@@ -68,6 +76,30 @@ export default function Overlay({data}: {data: UhusData | null}) {
     flyTo(dong.bounds);
   };
 
+  // A pinned map tooltip (a clicked place) carries kepler's ‹ arrow, which only flipped the
+  // tooltip to the other side. Here it goes one level up instead — a neighbourhood to its
+  // district, a district to all of Seoul — and lets go of the pin. The click is caught
+  // before it reaches kepler (capture, on window); the label beside the arrow says where.
+  const goUp = useRef(() => {});
+  goUp.current = () => {
+    if (focus.level === 'dong') focusGu(focus.gu);
+    else if (focus.level === 'gu') focusSeoul();
+    dispatch(onLayerClick(null) as any);
+  };
+  useEffect(() => {
+    const up = (e: MouseEvent) => {
+      if (document.body.classList.contains('sandbox')) return;
+      if (!(e.target as Element)?.closest?.('.map-popover .popover-arrow-left, .map-popover .popover-arrow-right')) return;
+      e.stopPropagation();
+      e.preventDefault();
+      goUp.current();
+    };
+    window.addEventListener('click', up, true);
+    return () => window.removeEventListener('click', up, true);
+  }, []);
+  const upLabel = focus.level === 'dong' ? focus.gu.name : focus.level === 'gu' ? 'Seoul' : '';
+  useEffect(() => { document.body.style.setProperty('--popover-up', JSON.stringify(upLabel)); }, [upLabel]);
+
   // Grabbing the map mid-flight hands control back to the user instead of fighting them.
   useEffect(() => {
     const grab = (e: PointerEvent) => { if ((e.target as Element)?.closest?.('.kepler-gl')) cancelFlight(); };
@@ -78,7 +110,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // Clicking a neighbourhood on the map focuses it (feature 2).
   const clicked = visState?.clicked;
   useEffect(() => {
-    if (!clicked || !data) return;
+    if (!clicked || !data || sandbox) return;
     const picked = pickedPlace(clicked, visState);
     if (picked?.level === 'dong') { const d = data.dongs.find((x) => x.code === picked.code); if (d) focusDong(d); }
     if (picked?.level === 'gu') { const g = data.gus.find((x) => x.code === picked.code); if (g) focusGu(g); }
@@ -89,11 +121,11 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // Keep the hover tooltip listing exactly the variables that are on the map, and the
   // daily points stacked over the area layers.
   const onMapKeys = layersOnMap(visState).map((x) => `${x.layer.id}@${x.layer.config.dataId}`).join(',');
-  useEffect(() => { if (visState) syncTooltip(dispatch, visState); }, [onMapKeys]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (visState && !sandbox) syncTooltip(dispatch, visState); }, [onMapKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Stacking is set when a layer is created (kepler puts new ones on top), so an order
   // dragged in kepler's panel holds until the next new layer.
   const layerCount = visState?.layers?.length ?? 0;
-  useEffect(() => { if (visState) syncOrder(dispatch, visState); }, [layerCount]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (visState && !sandbox) syncOrder(dispatch, visState); }, [layerCount, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 2D / 3D. kepler's own dragRotate flag is the single source of truth (its perspective
   // toggle tilts to 50° and rotates 24°). Heights are set when the mode switches or a
@@ -137,21 +169,30 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const lastDraw = useRef('');
   useEffect(() => {
     if (!layersLoaded || !data) return;
+    if (sandbox) { lastDraw.current = ''; return; }   // back from the sandbox: a full redraw
     const rest = [selectionKey, linked, grain, datasetKeys].join('|');
     const modeOnly = lastDraw.current === rest;
     lastDraw.current = rest;
     // the store as of right now ('map' is the KeplerGl id in App.tsx)
     drawSelection(dispatch, () => store.getState().keplerGl.map.visState, {selection, linked, grain, is3d, data, modeOnly});
-  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pairLayerId = (visState?.layers || []).find((l: any) => l.config.isVisible && pairKeysOf(l.id))?.id;
-  useEffect(() => { if (visState) restylePair(dispatch, visState, is3d); }, [is3d, pairLayerId]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the daily pair's grid takes the colours of the playing day (see pair.ts)
+  const timeValue = timeIdx >= 0 ? visState.filters[timeIdx].value?.[0] : null;
+  const playDay = timeValue != null ? Math.ceil(timeValue / 86400000) : null;
+  const dailyGrid = (visState?.layers || []).filter((l: any) => l.config.isVisible && (l.id.startsWith('bi:') || l.id.startsWith('bc:')))
+    .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}`).join();
   useEffect(() => {
-    if (!visState) return;
+    if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState);
+  }, [playDay, dailyGrid, datasetKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (visState && !sandbox) restylePair(dispatch, visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!visState || sandbox) { lastHeights.current = null; return; }
     const last = lastHeights.current;
     const heights = `${fillIds}|${splitCount}`;
     if (!last || last.is3d !== is3d || last.fillIds !== heights) sync3d(dispatch, visState, is3d);
     lastHeights.current = {is3d, fillIds: heights};
-  }, [is3d, fillIds, splitCount]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [is3d, fillIds, splitCount, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fit raised heights to the zoom once the camera settles — not every frame, which
   // would rebuild the extruded layer 60 times a second during a flight.
@@ -159,13 +200,13 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const zoomStep = Math.round((kepler?.mapState?.zoom ?? 0) * 4) / 4;
   const raisedKeys = (visState?.layers || []).filter((l: any) => l.config.visConfig?.enable3d).map((l: any) => l.id).join(',');
   useEffect(() => {
-    if (!is3d || !visState) return;
+    if (!is3d || !visState || sandbox) return;
     const t = window.setTimeout(() => {
       const st = store.getState().keplerGl.map;   // as of now, not as of the render
       adaptElevation(dispatch, st.visState, st.mapState.zoom, elevationOwner.current);
     }, 220);
     return () => window.clearTimeout(t);
-  }, [is3d, zoomStep, raisedKeys]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [is3d, zoomStep, raisedKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useMotionClass(kepler, playing);
   useUiScale();
@@ -180,6 +221,26 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // Side by side: CSS moves kepler's split divider clear of the frost column.
   useEffect(() => { document.body.classList.toggle('kepler-split', splitCount > 0); }, [splitCount]);
   const ready = !!(data && visState?.layers);
+  // a focused district shows its neighbourhood boundaries (see outline.ts)
+  const outlineGu = focus.level === 'gu' ? focus.gu.code : null;
+  useEffect(() => {
+    if (!ready) return;
+    showDongOutline(dispatch, store.getState().keplerGl.map.visState, data!, sandbox ? null : outlineGu);
+  }, [ready, outlineGu, datasetKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // into and out of the sandbox
+  const wasSandbox = useRef(false);
+  useEffect(() => {
+    if (!ready || sandbox === wasSandbox.current) return;
+    wasSandbox.current = sandbox;
+    document.body.classList.toggle('sandbox', sandbox);
+    const get = () => store.getState().keplerGl.map.visState;
+    if (sandbox) {
+      setPlaying(false); setDashboardOpen(false); setSettingsOpen(false);
+      enterSandbox(dispatch, get);
+    } else {
+      leaveSandbox(dispatch, get);
+    }
+  }, [ready, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the basemap and map switches remembered from Settings, once the map is up
   const restored = useRef(false);
   useEffect(() => {
@@ -193,20 +254,22 @@ export default function Overlay({data}: {data: UhusData | null}) {
       {/* Frosted column behind the Focus text: blurs and darkens only the map under it,
           fading out at the edges so it reads as no box at all. It must be the FIRST
           child — painted later, it frosted the top bar too and swallowed the tabs. */}
-      {ready && !sidePanelOpen && <div className="focus-frost" aria-hidden />}
+      {ready && !sidePanelOpen && !sandbox && <div className="focus-frost" aria-hidden />}
       <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d}
         page={page} onPage={(p) => { setPage(p); if (p === 'map') setDashboardOpen(false); }}
         dashboardOpen={dashboardOpen} onDashboard={() => { if (page !== 'map') { setPage('map'); setDashboardOpen(true); } else setDashboardOpen((v) => !v); }}
         settingsOpen={settingsOpen} onSettings={() => setSettingsOpen((v) => !v)} />
-      {settingsOpen && <SettingsPanel onClose={closeSettings} />}
+      {settingsOpen && <SettingsPanel onClose={closeSettings} annotations={annotations} onAnnotations={setAnnotations} />}
+      {ready && <MapAnnotations data={data!} show={annotations} />}
       {/* kepler's settings panel opens on the left, where the Focus block sits, so the
           block steps aside while it is open instead of the two overlapping. */}
-      {ready && !sidePanelOpen && (
+      {sandbox && <SandboxBar onBack={() => setPage('map')} />}
+      {ready && !sidePanelOpen && !sandbox && (
         <FocusBlock data={data!} focus={focus} onSeoul={focusSeoul} onGu={focusGu} onDong={focusDong}
           grain={grain} onGrain={setGrain} selection={selection} linked={linked}
           pairable={planFor(selection, linked, grain).pairable} onLink={() => setLinked((v) => !v)} />
       )}
-      {ready && (
+      {ready && !sandbox && (
         <GraphCard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
           onOpenDashboard={() => setDashboardOpen(true)}
           onPick={(level, code) => {
@@ -214,9 +277,9 @@ export default function Overlay({data}: {data: UhusData | null}) {
             else { const g = data!.gus.find((x) => x.code === code); if (g) focusGu(g); }
           }} />
       )}
-      {ready && temporalOn && <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} />}
-      {ready && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select} />}
-      {ready && dashboardOpen && (
+      {ready && temporalOn && !sandbox && <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} />}
+      {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select} />}
+      {ready && dashboardOpen && !sandbox && (
         <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
           onSelect={select} onClose={() => setDashboardOpen(false)}
           onPick={(level, code) => {

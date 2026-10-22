@@ -417,11 +417,11 @@ button { font: inherit; color: inherit; }
 
 /* ---------- kepler, restyled from outside (v3.2.6 class names) ---------- */
 /* Its time widget stays mounted — it runs the animation loop — but the time card is the face. */
-.kepler-gl > div:has(> .bottom-widget--container) { display: none !important; }
+body:not(.sandbox) .kepler-gl > div:has(> .bottom-widget--container) { display: none !important; }
 
 /* kepler's settings panel: hidden while closed (the gear buttons are the only way in),
    and when open it lives between the top bar and the drawer cards. */
-body:not(.kepler-side-open) .side-panel--container { display: none !important; }
+body:not(.kepler-side-open):not(.sandbox) .side-panel--container { display: none !important; }
 /* The panel is glass like ours: kepler's theme (src/kepler/theme.ts) sets the colours,
    this adds the shape and the blur that a theme value cannot. */
 .side-panel--container .side-bar__inner { border-radius: 20px; border: var(--hair) solid var(--glass-line); overflow: hidden;
@@ -435,6 +435,11 @@ body:not(.kepler-side-open) .side-panel--container { display: none !important; }
 /* The map's hover tooltip paints with the theme's panelBackground, which is a faint
    tint for the settings panel's inner cards — on the map it all but vanished. Its own,
    darker glass here, matching the panels. */
+/* a pinned tooltip's ‹ goes one level up (Overlay.tsx), labelled with where: the
+   district, or Seoul; kepler's › (the flip back) never shows */
+body:not(.sandbox) .map-popover .popover-arrow-right { display: none !important; }
+body:not(.sandbox) .map-popover .popover-arrow-left { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; }
+body:not(.sandbox) .map-popover .popover-arrow-left::after { content: var(--popover-up, ''); }
 .map-popover { background-color: rgba(16, 19, 24, 0.68) !important; border: var(--hair) solid var(--glass-line);
   border-radius: 12px; box-shadow: 0 12px 32px -10px rgba(0,0,0,0.6) !important;
   backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
@@ -442,8 +447,8 @@ body:not(.kepler-side-open) .side-panel--container { display: none !important; }
    but not in the catalogue (theme, unit, sum/mean, region keys), and a layer added here
    would sit outside the app's rules — no card, not counted. Both stay out until there is
    a step that registers new data in the catalogue. */
-.side-panel--container .add-data-button,
-.side-panel--container .add-layer-button { display: none !important; }
+body:not(.sandbox) .side-panel--container .add-data-button,
+body:not(.sandbox) .side-panel--container .add-layer-button { display: none !important; }
 /* Side by side: the two halves start right of the frost column, so both are the same
    width and — sharing kepler's one synced view — show exactly the same stretch of Seoul,
    edge to edge. Under the frost there is no map in this mode. The inset is capped so a
@@ -461,13 +466,17 @@ body.kepler-split .kepler-gl .maps { padding-left: min(calc(var(--frost-w) * var
 body.kepler-split .kepler-gl .maps > div:first-child { box-shadow: -1px 0 0 rgba(255, 255, 255, 0.07); }
 body.kepler-split .kepler-gl .maps > div { flex: 1 1 0 !important; width: auto !important; min-width: 0; }
 /* kepler's own collapse tab sticks out over the time card; the header ✕ replaces it */
-.side-panel--container .side-bar__close { display: none !important; }
-body.kepler-side-open .side-panel--container {
+body:not(.sandbox) .side-panel--container .side-bar__close { display: none !important; }
+body.kepler-side-open .side-panel--container, body.sandbox .side-panel--container {
   zoom: var(--ui-zoom);   /* like the overlay (uiScale.ts); its offsets below scale with it */
   top: calc(var(--topbar-h) + var(--gap) * 2) !important;
   bottom: calc(var(--edge) + var(--card-h) + var(--gap)) !important;
   height: auto !important;
 }
+
+/* the gu and dong names and boundaries (MapAnnotations): above the map, below the panels
+   (the overlay is z-index 10), never in the pointer's way */
+.map-annotations { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 9; pointer-events: none; }
 
 /* ---------- settings: a glass panel dropping from the top bar ---------- */
 .settings { position: absolute; z-index: 31; top: calc(8px + var(--topbar-h) + 8px); right: calc(var(--gap) + 140px);   /* left is set under the tab */
@@ -482,6 +491,11 @@ body.kepler-side-open .side-panel--container {
 .set-seg button { border: 0; background: none; border-radius: 999px; padding: 5px 0; font-size: 12px; color: var(--ink-2); cursor: pointer; }
 .set-seg button:hover { color: var(--ink); }
 .set-seg button.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+.set-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.set-chips button { border: var(--hair) solid var(--glass-line); background: rgba(255,255,255,0.03); border-radius: 999px;
+  padding: 3px 10px; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.set-chips button:hover { color: var(--ink); }
+.set-chips button.on { color: var(--ink); background: rgba(255,255,255,0.12); border-color: transparent; }
 .set-switch { position: relative; display: flex; align-items: center; gap: 10px; padding: 5px 0; cursor: pointer; }
 .set-switch > span { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .set-switch b { font-weight: 500; font-size: 13px; color: var(--ink); }
@@ -595,3 +609,17 @@ body.kepler-side-open .side-panel--container {
 .ReactModal__Content .modal--wrapper select { background: #22262d !important; color: var(--ink); border: var(--hair) solid var(--glass-line);
   border-radius: 8px; padding: 4px 8px; }
 .ReactModal__Content .modal--wrapper select option { background: #16191e; }
+
+/* ---------- sandbox: the map is plain kepler's (sandbox.ts) ---------- */
+.sandbox-bar { position: absolute; z-index: 6; top: calc(8px + var(--topbar-h) + 10px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 16px; border-radius: 999px; white-space: nowrap;
+  background: var(--glass-bg-solid); font-size: 12px; color: var(--ink-2); }
+.sb-title b { color: var(--accent); font-weight: 600; letter-spacing: 0.04em; }
+.sb-hint { color: var(--ink-3); }
+.sandbox-bar button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px;
+  border: var(--hair) solid var(--glass-line); background: rgba(255,255,255,0.04); font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.sandbox-bar button:hover { color: var(--ink); background: rgba(255,255,255,0.1); }
+.sandbox-bar .sb-back { color: var(--ink); background: rgba(232, 163, 92, 0.16); border-color: rgba(232, 163, 92, 0.35); }
+@media (max-width: 1100px) { .sb-hint { display: none; } }
+/* kepler's map controls sit below the top bar, clear of it */
+body.sandbox .kepler-gl .map-control { top: calc(8px + var(--topbar-h) * var(--ui-zoom) + 12px) !important; }

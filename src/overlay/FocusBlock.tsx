@@ -6,8 +6,8 @@ import type {Place, UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
 import {useKepler} from './useKepler';
 import {extentOf, fmt, focusValue} from './focusValues';
-import {openMapSettings, selectionEntries, type Grain} from './layers';
-import {BIVARIATE, PAIR_FIELD} from './pair';
+import {dataIdFor, openMapSettings, selectionEntries, type Grain} from './layers';
+import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from './pair';
 import InfoTip from './InfoTip';
 
 const THEME_LABEL = Object.fromEntries(THEMES.map((t) => [t.key, t.label]));
@@ -71,12 +71,15 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
       <div className="layer-cards">
         {onMap.map(({layer, variable: x, pairPart}, i) => {
           const dataset = visState.datasets[layer.config.dataId];
-          const value = focusValue(dataset, x.key, focus, x.how, visState.filters);
-          const extent = extentOf(dataset, x.key);
+          // the daily pair's grid and raised areas sit on the areas; its values live in the daily rows
+          const onLayer = dataset?.fields.some((f: any) => f.name === x.key);
+          const source = !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)] : dataset;
+          const value = focusValue(source, x.key, focus, x.how, visState.filters);
+          const extent = extentOf(source, x.key);
           const colors: string[] = layer.config.visConfig?.colorRange?.colors || [];
           // A pair of variables shares one layer. In 2D each keeps its own axis of the
           // colour grid (A up the rows, B along the columns); in 3D A is colour, B height.
-          const bivariate = !!pairPart && layer.config.colorField?.name === PAIR_FIELD;
+          const bivariate = !!pairPart && isBivariateLayer(layer);
           // B of a pair: the height of raised areas, or the size of daily points
           const size = pairPart === 'b' && layer.type === 'point';
           const height = pairPart === 'b' && !bivariate && !size;
@@ -87,7 +90,7 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
             : height ? 'height' : size ? 'circle size' : pairPart === 'a' ? 'colour' : splitMaps.length && half >= 0 ? (half === 0 ? '◧ left map' : 'right map ◨') : null;
           // Daily data exists per district only: at neighbourhood focus the value shown
           // is the district's, and the card has to say so rather than pass it off as local.
-          const coarser = focus.level === 'dong' && !layer.config.dataId.startsWith('dong');
+          const coarser = focus.level === 'dong' && !(source?.id ?? layer.config.dataId).startsWith('dong');
           // Each variable has its own point in time: daily data shows the playing day,
           // static data the year its source names. No year in the source → no date shown.
           const when = isTemporal(x)
@@ -132,7 +135,7 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                   {axis ? (
                     <div className="legend-axis">
                       <div className="legend-steps">{axis.map((c) => <i key={c} style={{background: c}} />)}</div>
-                      {pairPart === 'a' && <BivariateGrid focusClass={focusClass(dataset, focus)} labels={layer.config.visConfig?.colorRange?.colorMap} />}
+                      {pairPart === 'a' && <BivariateGrid here={focusCell(layer, dataset, focus)} />}
                     </div>
                   ) : height
                     ? <div className="legend-heights" aria-hidden><i /><i /><i /><i /><i /></div>
@@ -159,15 +162,30 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
 
 // The 3×3 key of the bivariate map: A rises up the rows, B runs along the columns. The
 // focused place's own cell is ringed, so the card says where it falls.
-function BivariateGrid({focusClass, labels}: {focusClass: string | null; labels?: [string, string][]}) {
+function BivariateGrid({here}: {here: [number, number] | null}) {
   return (
     <div className="bi-grid" aria-hidden>
-      {[2, 1, 0].map((la) => [0, 1, 2].map((lb) => {
-        const label = labels?.[la * 3 + lb]?.[0];
-        return <i key={`${la}${lb}`} className={label && label === focusClass ? 'here' : ''} style={{background: BIVARIATE[la][lb]}} />;
-      }))}
+      {[2, 1, 0].map((la) => [0, 1, 2].map((lb) => (
+        <i key={`${la}${lb}`} className={here && here[0] === la && here[1] === lb ? 'here' : ''} style={{background: BIVARIATE[la][lb]}} />
+      )))}
     </div>
   );
+}
+
+// The focused place's cell: from the static pair's class label, or the daily pair's colour
+// of the day (its colour map is keyed by place code).
+function focusCell(layer: any, dataset: any, focus: Focus): [number, number] | null {
+  const colorMap: [string, string][] = layer.config.visConfig?.colorRange?.colorMap || [];
+  if (isDailyBivariate(layer)) {
+    if (focus.level === 'seoul') return null;
+    const byDong = layer.config.dataId === 'dong';
+    if (byDong && focus.level !== 'dong') return null;   // a district holds many dong classes
+    const code = byDong ? (focus as any).dong.code : focus.gu.code;
+    return cellOf(colorMap.find((c) => c[0] === code)?.[1]);
+  }
+  const label = focusClass(dataset, focus);
+  const at = label ? colorMap.findIndex((c) => c[0] === label) : -1;
+  return at >= 0 ? [Math.floor(at / 3), at % 3] : null;
 }
 
 // The bivariate class of the focused dong or district, read from the pair's dataset.

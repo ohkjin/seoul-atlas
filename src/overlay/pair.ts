@@ -1,6 +1,7 @@
-import {addDataToMap} from '@kepler.gl/actions';
-import {heightScaleFor, paletteRange, type Variable} from '../data/catalog';
-import type {UhusData} from '../data/uhus';
+import {addDataToMap, layerVisConfigChange, layerVisualChannelConfigChange} from '@kepler.gl/actions';
+import {VAR_BY_KEY, heightScaleFor, paletteRange, type Variable} from '../data/catalog';
+import {valuesByPlace} from './focusValues';
+import {displayNameOf, type UhusData} from '../data/uhus';
 import type {Grain} from './layers';
 
 // Two neighbourhood variables on one map. kepler has no bivariate map, so each pair gets
@@ -13,7 +14,8 @@ type Dispatch = (a: any) => void;
 
 export const PAIR_FIELD = 'bivariate';
 export const pairIdOf = (a: string, b: string) => `bi:${a}:${b}`;
-// bc:A:B is the daily pair drawn as columns in 3D
+// bc:A:B is a daily pair in 3D: bubbles for two daily variables, raised areas for a daily
+// and a static one (A the daily colour, B the static height)
 export const columnPairIdOf = (a: string, b: string) => `bc:${a}:${b}`;
 export const pairKeysOf = (id: string) => (id.startsWith('bi:') || id.startsWith('bc:') ? id.slice(3).split(':') : null);
 export const pairDataIdOf = (grain: Grain) => `${grain}_pair`;
@@ -64,9 +66,9 @@ export function addPair(dispatch: Dispatch, data: UhusData, grain: Grain, a: Var
   const fields = [
     ...cols.map((c) => {
       const f = src.fields[idx(c)];
-      return {name: f.name, type: f.type, format: f.format ?? '', analyzerType: f.analyzerType};
+      return {name: f.name, type: f.type, format: f.format ?? '', analyzerType: f.analyzerType, displayName: displayNameOf(f.name)};
     }),
-    {name: PAIR_FIELD, type: 'string', format: '', analyzerType: 'STRING'}
+    {name: PAIR_FIELD, type: 'string', format: '', analyzerType: 'STRING', displayName: `Class (${a.short} × ${b.short})`}
   ];
   const dataId = pairDataIdOf(grain);
   // The layer travels inside addDataToMap's config: kepler adds the dataset as a task, so
@@ -85,41 +87,153 @@ export function addPair(dispatch: Dispatch, data: UhusData, grain: Grain, a: Var
   } as any));
 }
 
-// Two daily variables on the same rows share one point layer: colour from A, size from B.
-// The colour is two hues only, blue for low and red for high, in four steps (quartiles):
-// small circles must still read by colour alone, a one-hue ramp washed out at that size,
-// and six-hue ramps read as a rainbow. Taken from kepler's ColorBrewer RdBu, skipping its
-// near-black ends and near-white middle, which vanish or glare on the dark basemap.
-// Radii are kepler's zoom-14 units: ~6–22 px for 25 districts, ~1.5–6 px for 422
-// neighbourhoods (larger ran together into one blob over the city).
+// The blue–red ramp of the daily bubbles: two hues only, blue for low and red for high,
+// in four steps (quartiles) — six-hue ramps read as a rainbow. Taken from kepler's
+// ColorBrewer RdBu, skipping its near-black ends and near-white middle, which vanish or
+// glare on the dark basemap.
 function blueRed() {
   const r = paletteRange('RdBu', 8, true);
   return r && {...r, name: 'RdBu · 4 steps', colors: [1, 2, 5, 6].map((i) => r.colors[i])};
 }
-export function dailyPairConfig(a: Variable, b: Variable, dataId: string) {
-  const range = blueRed();
+
+// A pair with a daily variable in 2D — two daily ones, or a static and a daily one: the
+// same bivariate grid as the static pair, on the places' own areas, the colours of the
+// playing day. kepler cannot colour a polygon by another
+// dataset's row, and rebuilding a 422-area dataset every day cost 60–140 ms a step; so the
+// layer sits on the static areas (dong / gu), coloured by place code through a colour map
+// (customOrdinal), and only that map is rewritten each day — about 1 ms
+// (recolourDailyPair). Each variable is cut into thirds of that day's places, as the
+// static pair is: the grid says where it is hotter or wetter than elsewhere today. Cut by
+// the whole year instead (the basis of the single daily colours), a day's weather — about
+// the same all over Seoul — put every place in one third, and the map showed two colours.
+const NO_DATA = '#3a3f48';
+const codeFieldOf = (areaId: string) => (areaId.startsWith('dong') ? 'dong_code' : 'gu_code');
+const dailyRange = (colorMap: [string, string][]) =>
+  ({name: 'Seoul bivariate · daily', type: 'custom', category: 'Custom', colors: [...BIVARIATE.flat(), NO_DATA], colorMap});
+export function dailyPairConfig(a: Variable, b: Variable, areaId: string) {
+  const key = codeFieldOf(areaId);
   return {
-    id: pairIdOf(a.key, b.key), type: 'point',
-    config: {dataId, label: `${a.short} × ${b.short}`, columns: {lat: 'lat', lng: 'lng'}, isVisible: true,
-      // no rim: on circles this small a white ring outweighed the colour inside it
-      visConfig: {opacity: 0.9, radiusRange: dataId === 'dong_daily' ? [6, 26] : [24, 90], outline: false, filled: true,
-        ...(range ? {colorRange: range} : {})}},
-    // quantile: sales are heavily skewed — equal-width bins left almost every place in the lowest
-    visualChannels: {colorField: {name: a.key, type: 'real'}, colorScale: 'quantile',
-      sizeField: {name: b.key, type: 'real'}, sizeScale: 'sqrt'}
+    id: pairIdOf(a.key, b.key), type: 'geojson',
+    config: {dataId: areaId, label: `${a.short} × ${b.short}`, columns: {geojson: '_geojson'}, isVisible: true,
+      colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
+      visConfig: {opacity: 0.85, filled: true, stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.7, thickness: 0.5,
+        colorRange: dailyRange([])}},
+    visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal'}
   };
 }
 
-// The daily pair in 3D: hexagonal columns, colour from A (the same blue–red quartiles as
-// the circles), height from B.
+// A pair layer drawn as the 3×3 grid (2D): the static pair's class field or the daily
+// pair's place-code colour map — both customOrdinal. The daily one sits on the areas.
+export const isBivariateLayer = (layer: any) => !!layer && layer.id.startsWith('bi:') && layer.config.colorScale === 'customOrdinal';
+export const isDailyBivariate = (layer: any) => isBivariateLayer(layer) && !isPairDataId(layer.config.dataId);
+// Its colours by place code, for the graph's dots and the legend's ringed cell.
+export const dailyColoursOf = (layer: any) =>
+  isDailyBivariate(layer) ? new Map<string, string>(layer.config.visConfig?.colorRange?.colorMap || []) : null;
+// Which cell of the grid a colour is.
+export function cellOf(colour: string | undefined): [number, number] | null {
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (BIVARIATE[i][j] === colour) return [i, j];
+  return null;
+}
+
+// Colours the pair layers that change with the day — the 2D grid and the 3D bc: layers —
+// for the playing day: each place's colour from that day's values (the rows the time
+// filter lets through; a static variable's own values). Skipped when nothing changed.
+export function recolourDailyPair(dispatch: Dispatch, visState: any) {
+  for (const layer of visState?.layers || []) {
+    if (!layer.config.isVisible) continue;
+    const grid = layer.id.startsWith('bi:') && (layer.config.dataId === 'dong' || layer.config.dataId === 'gu');
+    const bubbles = layer.id.startsWith('bc:');
+    if (!grid && !bubbles) continue;
+    const keys = pairKeysOf(layer.id);
+    if (!keys) continue;
+    const [a, b] = keys.map((k: string) => VAR_BY_KEY[k]);
+    const byDong = layer.config.dataId.startsWith('dong');
+    const area = visState.datasets[byDong ? 'dong' : 'gu'];
+    const sourceOf = (x: Variable) => visState.datasets[x.dataset === 'dong' ? (byDong ? 'dong' : 'gu')
+      : x.dataset === 'dong_daily' ? (byDong ? 'dong_daily' : 'gu_daily') : x.dataset];
+    const key = byDong ? 'dong_code' : 'gu_code';
+    const valuesOf = (x: Variable) => {
+      const ds = sourceOf(x);
+      return ds ? valuesByPlace(ds, x.key, key, x.dataset === 'dong' ? [] : visState.filters) : null;
+    };
+    const va = valuesOf(a), vb = grid ? valuesOf(b) : null;
+    if (!area || !va || (grid && !vb)) continue;
+    const ci = area.fields.findIndex((f: any) => f.name === key);
+    const codes: string[] = [];
+    for (let r = 0; r < area.dataContainer.numRows(); r++) codes.push(String(area.dataContainer.valueAt(r, ci)));
+    let colorMap: [string, string][];
+    let range: any;
+    if (grid) {
+      const ta = thirdsOf([...va.values()]), tb = thirdsOf([...vb!.values()]);
+      colorMap = codes.map((code) => {
+        const i = ta.level(va.get(code)), j = tb.level(vb!.get(code));
+        return [code, i == null || j == null ? NO_DATA : BIVARIATE[i][j]];
+      });
+      range = dailyRange(colorMap);
+    } else {
+      // A's quartiles among the day's places
+      const ramp = bubbleRange([]).colors;
+      const sorted = [...va.values()].sort((p, q) => p - q);
+      const cuts = ramp.slice(1).map((_: string, i: number) => sorted[Math.min(sorted.length - 1, Math.floor(((i + 1) / ramp.length) * sorted.length))]);
+      colorMap = codes.map((code) => {
+        const v = va.get(code);
+        if (v == null) return [code, NO_DATA];
+        let k = 0;
+        while (k < cuts.length && v >= cuts[k]) k++;
+        return [code, ramp[k]];
+      });
+      range = bubbleRange(colorMap);
+    }
+    const own = visState.datasets[layer.config.dataId];
+    if (layer.config.colorField?.name !== key || layer.config.colorScale !== 'customOrdinal') {
+      const field = own?.fields.find((f: any) => f.name === key);
+      if (field) dispatch(layerVisualChannelConfigChange(layer, {colorField: field, colorScale: 'customOrdinal'} as any, 'color', {colorRange: range} as any));
+      continue;
+    }
+    const old: [string, string][] = layer.config.visConfig?.colorRange?.colorMap || [];
+    if (old.length === colorMap.length && old.every((c, i) => c[0] === colorMap[i][0] && c[1] === colorMap[i][1])) continue;
+    dispatch(layerVisConfigChange(layer, {colorRange: range} as any));
+  }
+}
+
+// Two daily variables in 3D: bubbles on the daily rows — colour from A, in blue–red
+// quartiles of the playing day's places (so a day's weather, about the same all over
+// Seoul, still shows where it is higher), recoloured by place code like the grid; size
+// from B over its whole year. No rim: on bubbles this small a white ring outweighed the
+// colour. Radii are kepler's zoom-14 units: ~1.5–6 px for 422 neighbourhoods (larger ran
+// together into one blob), ~6–22 px for 25 districts.
+const bubbleRange = (colorMap: [string, string][]) => {
+  const r = blueRed();
+  return {name: 'RdBu · 4 steps · daily', type: 'custom', category: 'Custom', colors: r ? r.colors : [], colorMap};
+};
 export function dailyColumnPairConfig(a: Variable, b: Variable, dataId: string) {
-  const range = blueRed();
+  const key = codeFieldOf(dataId);
   return {
-    id: columnPairIdOf(a.key, b.key), type: 'hexagonId',
-    config: {dataId, label: `${a.short} × ${b.short}`, columns: {hex_id: 'h3'}, isVisible: true,
-      visConfig: {opacity: 0.9, coverage: 0.9, enable3d: true, elevationScale: 5, ...(range ? {colorRange: range} : {})}},
-    visualChannels: {colorField: {name: a.key, type: 'real'}, colorScale: 'quantile',
+    id: columnPairIdOf(a.key, b.key), type: 'point',
+    config: {dataId, label: `${a.short} × ${b.short}`, columns: {lat: 'lat', lng: 'lng'}, isVisible: true,
+      colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
+      visConfig: {opacity: 0.9, radiusRange: dataId === 'dong_daily' ? [6, 26] : [24, 90], outline: false, filled: true,
+        colorRange: bubbleRange([])}},
+    visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
       sizeField: {name: b.key, type: 'real'}, sizeScale: heightScaleFor(b)}
+  };
+}
+
+// A static and a daily variable in 3D: the places' areas raised by the static one and
+// coloured by the daily one. kepler raises a polygon only by a field of its own dataset,
+// so the daily variable cannot be the height without rebuilding the areas every day; it
+// takes the colour instead — the day's blue–red quartiles, recoloured by place code like
+// the bubbles.
+export function dailyRaisedPairConfig(daily: Variable, stat: Variable, areaId: string) {
+  const key = codeFieldOf(areaId);
+  return {
+    id: columnPairIdOf(daily.key, stat.key), type: 'geojson',
+    config: {dataId: areaId, label: `${daily.short} × ${stat.short}`, columns: {geojson: '_geojson'}, isVisible: true,
+      colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
+      visConfig: {opacity: 0.85, filled: true, stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.7, thickness: 0.5,
+        enable3d: true, elevationScale: 5, colorRange: bubbleRange([])}},
+    visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
+      heightField: {name: stat.key, type: 'real'}, heightScale: 'linear'}
   };
 }
 

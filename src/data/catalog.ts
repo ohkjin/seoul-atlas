@@ -131,14 +131,18 @@ export function layerConfigFor(x: Variable, isVisible = true) {
 export const dailyColorRange = (x: Variable) =>
   (x.key === 'temp_max' || x.key === 'apptemp_max' ? undefined : paletteRange('Uber Viz Sequential'));
 
-// A daily variable in 3D: one hexagonal column per place (kepler's H3 layer, on the h3
-// cell of each row), its colour and its height both the value.
+// A daily variable in 3D (c:key): a bubble per place, coloured and sized by its value.
+// kepler cannot raise its points, and a raised area would need its heights rebuilt every
+// day (a new dataset, 60–140 ms a step) — hexagon columns did stand up, but read as a
+// forest of bars; the bubbles lie on the tilted map instead.
 export function columnConfigFor(x: Variable, dataId: string) {
   const range = dailyColorRange(x);
   return {
-    id: columnIdOf(x.key), type: 'hexagonId',
-    config: {dataId, label: x.short, columns: {hex_id: 'h3'}, isVisible: true,
-      visConfig: {opacity: 0.9, coverage: 0.9, enable3d: true, elevationScale: 5, ...(range ? {colorRange: range} : {})}},
+    id: columnIdOf(x.key), type: 'point',
+    config: {dataId, label: x.short, columns: {lat: 'lat', lng: 'lng'}, isVisible: true,
+      // kepler's zoom-14 radius units: ~1.5–6 px for 422 neighbourhoods, ~6–22 px for 25 districts
+      visConfig: {opacity: 0.9, radiusRange: dataId === 'dong_daily' ? [6, 26] : [24, 90], outline: false, filled: true,
+        ...(range ? {colorRange: range} : {})}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile',
       sizeField: {name: x.key, type: 'real'}, sizeScale: heightScaleFor(x)}
   };

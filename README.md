@@ -24,6 +24,25 @@ daily files (`dong_daily_core.json`, `dong_group_daily.json`) are large and load
 the first time a daily variable is shown under Dong detail; the district rows stand in until
 then.
 
+## Atlas and Sandbox
+
+kepler.gl is a library inside the app; everything on the map is a kepler dataset, layer
+or filter. The **atlas** (Map, Dashboard) drives kepler: it decides which layers exist,
+recolours some day by day and owns the `time` filter — so kepler's own tools are kept
+small there (the ⚙ panel edits the atlas's layers; Add data / Add layer are hidden).
+
+The **Sandbox** tab hands the map to plain kepler: the atlas's panels and automation step
+aside, and kepler's full UI (Add data, Add layer, Filters, its time slider, its map
+controls) works on the same data. See `src/overlay/sandbox.ts`:
+
+- Leaving parks what was made there — the user's layers hidden, their filters removed
+  (kepler 3.2.6 still applies a filter marked `enabled: false`) — and restores the atlas
+  as it was; entering again brings them back. A removed `time` filter is re-created.
+- "By district" / "By neighbourhood" add one filter on the place name across every
+  dataset that has it (kepler's panel only syncs time filters).
+- Every column has a `displayName` (`withDisplayNames` in `src/data/uhus.ts`), so kepler's
+  pickers, filters and tooltips read "District", "Neighbourhood", "RHSI".
+
 ## Dependency pins — read before upgrading
 
 - **`.npmrc` → `legacy-peer-deps=true`.** kepler 3.x ships loaders.gl 4 while deck.gl 8.9
@@ -65,6 +84,10 @@ repository, then:
 | Build output directory | `dist` |
 | Root directory | (blank — the repository root) |
 
+- If the project was created as a **Worker** instead (deploy command `npx wrangler deploy`),
+  `wrangler.jsonc` makes it upload `dist/` as static assets. Without that file wrangler runs
+  its auto-setup, which builds the app a second time and runs out of memory.
+- The build script raises Node's heap to 4 GB; the default ~2 GB is barely enough.
 - Node comes from `.nvmrc` (22). npm reads `.npmrc` (`legacy-peer-deps`, see above),
   so the install needs no extra flags.
 - No environment variables are needed: the basemaps are CARTO's and need no Mapbox token.
