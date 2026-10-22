@@ -112,18 +112,26 @@ export function drawSelection(dispatch: Dispatch, get: GetVisState,
   }
 
   // The neighbourhood pair has its own small dataset: kept while it is the same pair in
-  // the same grain, rebuilt otherwise, dropped when no pair is wanted.
+  // the same grain, rebuilt otherwise, dropped when no pair is wanted. kepler adds it as a
+  // task, so for a moment after addPair neither the dataset nor its layer is there yet —
+  // and removing the old one re-runs this right then. A pair on its way is not added
+  // again: two layers with one id made deck.gl stop with an "assertion failed" error.
   vs = get();
   const pairId = plan.areaPair ? plan.layers[0] : null;
+  const pairDataId = pairDataIdOf(grain);
+  const onItsWay = pairId != null && pendingPair?.layerId === pairId && pendingPair.dataId === pairDataId
+    && Date.now() - pendingPair.at < 5000;
+  if (pairId && find(vs, pairId)?.config.dataId === pairDataId) pendingPair = null;   // arrived
   for (const id of Object.keys(vs.datasets)) {
     if (!isPairDataId(id)) continue;
-    const keep = pairId && id === pairDataIdOf(grain) && find(vs, pairId)?.config.dataId === id;
+    const keep = pairId && id === pairDataId && (find(vs, pairId)?.config.dataId === id || onItsWay);
     if (!keep) dispatch(removeDataset(id));
   }
   vs = get();
-  if (plan.areaPair && !find(vs, pairId!)) {
+  if (plan.areaPair && !find(vs, pairId!) && !onItsWay) {
     addPair(dispatch, data, grain, plan.areaPair[0], plan.areaPair[1], is3d);
     pairMode.set(pairId!, is3d);
+    pendingPair = {layerId: pairId!, dataId: pairDataId, at: Date.now()};
   }
   // Single-variable layers and the daily pair: created the first time, reused after —
   // so settings made in kepler's panel survive unlinking and linking again.
@@ -190,6 +198,8 @@ function hideLayer(dispatch: Dispatch, layer: any) {
 // stands up. Restyled only on a real switch, so a colour field or palette picked in
 // kepler's panel otherwise stays.
 const pairMode = new Map<string, boolean>();
+// The area pair last asked of kepler and not seen on the map yet (see drawSelection).
+let pendingPair: {layerId: string; dataId: string; at: number} | null = null;
 export function restylePair(dispatch: Dispatch, visState: any, is3d: boolean) {
   const layer = (visState?.layers || []).find((l: any) => pairKeysOf(l.id) && isPairDataId(l.config.dataId));
   const keys = layer && pairKeysOf(layer.id);
