@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>3D Look Mockup</title>
+<!-- Choice mockup, nothing applied: (1) how Settings offers the two 3D looks, A (glow) and
+     C (solid), and (2) how much light C gets. The pictures are captures of the real app,
+     same view, Vignette on. Served by the dev server at /mockups/3d-look.html. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ink: #eef2f7; --ink-2: #a9b2bf; --ink-3: #6f7886; --line: rgba(255,255,255,0.08); --accent: #e8a35c; }
+body { margin: 0; background: #0b0d10; color: var(--ink); font-family: Manrope, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1180px; margin: 0 auto; padding: 36px 24px 60px; }
+h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+.lede { margin: 0 0 32px; color: var(--ink-2); font-size: 14px; }
+h2 { display: flex; align-items: baseline; gap: 10px; margin: 40px 0 6px; font-size: 16px; font-weight: 600; }
+h2 b { font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; color: var(--accent); }
+.hint { margin: 0 0 18px; color: var(--ink-3); font-size: 13px; }
+.row { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start; }
+.opt { flex: 1 1 300px; max-width: 360px; }
+.opt > .tag { display: inline-block; margin-bottom: 8px; padding: 2px 9px; border-radius: 999px; font: 500 11px 'IBM Plex Mono', monospace;
+  color: var(--accent); background: rgba(232,163,92,0.12); }
+.opt > p { margin: 10px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+
+/* a slice of the Settings panel, Effects tab, as it would look */
+.panel { width: 300px; box-sizing: border-box; padding: 6px 14px 12px; border-radius: 18px; background: rgba(16,19,24,0.86);
+  border: 1px solid var(--line); box-shadow: 0 24px 60px -18px rgba(0,0,0,0.7); }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; padding: 2px; margin: 8px 0 4px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+.tabs span { padding: 6px 0; border-radius: 999px; text-align: center; font-size: 12px; color: var(--ink-2); }
+.tabs span.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+section { padding: 10px 0; border-bottom: 1px solid var(--line); }
+section:last-child { border-bottom: 0; }
+h3 { margin: 0 0 8px; font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.sw { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.sw span { flex: 1; display: flex; flex-direction: column; }
+.sw b { font-weight: 500; font-size: 13px; }
+.sw small { font-size: 11px; color: var(--ink-3); }
+.sw i { width: 30px; height: 18px; border-radius: 999px; background: rgba(232,163,92,0.45); position: relative; }
+.sw i::after { content: ''; position: absolute; left: 14px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); }
+.sw.off i { background: rgba(255,255,255,0.12); }
+.sw.off i::after { left: 2px; background: var(--ink-2); }
+/* design 1: two picture tiles, like the basemap tiles */
+.looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.look { position: relative; display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: var(--ink-3); cursor: pointer; }
+.look img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; object-position: 50% 40%; border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.1); }
+.look.on { color: var(--ink); }
+.look.on img { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.look small { color: var(--ink-3); font-size: 10.5px; }
+/* design 2: a list, a small picture beside each line */
+.list .item { display: flex; gap: 10px; align-items: center; padding: 7px 8px; margin: 0 -8px; border-radius: 10px; cursor: pointer; }
+.list .item img { width: 56px; height: 38px; object-fit: cover; border-radius: 7px; border: 1px solid rgba(255,255,255,0.1); }
+.list .item span { flex: 1; display: flex; flex-direction: column; }
+.list .item b { font-weight: 500; font-size: 13px; }
+.list .item small { font-size: 11px; color: var(--ink-3); }
+.list .item .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #484f58; box-sizing: border-box; }
+.list .item.on { background: rgba(255,255,255,0.05); }
+.list .item.on .dot { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px #16191e; }
+
+/* part 2: the pictures */
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+figure { margin: 0; }
+figure img { display: block; width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+figcaption { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+figcaption b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+figure.ref figcaption b { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>3D 모습 고르기 — 목업</h1>
+  <p class="lede">아직 아무것도 적용하지 않았어요. 실제 앱을 같은 화면에서 찍은 그림이고, 모두 Vignette 켜짐 상태예요. 1과 2에서 하나씩 골라 주세요.</p>
+
+  <h2><b>1</b>설정에서 3D 모습을 고르는 방식</h2>
+  <p class="hint">지금의 Glow·Vignette 스위치 대신, 3D는 A와 C 둘 중 하나만 고르게 돼요. 2D는 그대로(빛 효과 없음, 검은 경계선).</p>
+  <div class="row">
+    <div class="opt">
+      <span class="tag">1-가 · 그림 타일</span>
+      <div class="panel">
+        <div class="tabs"><span>Map</span><span class="on">Effects</span><span>Interaction</span><span>Export</span></div>
+        <section>
+          <h3>3D look</h3>
+          <div class="looks">
+            <div class="look on"><img src="img/a.png" alt=""><span>Glow<br><small>A · 빛이 겹쳐 밝아짐</small></span></div>
+            <div class="look"><img src="img/c1.png" alt=""><span>Solid<br><small>C · 단단한 색</small></span></div>
+          </div>
+        </section>
+        <section>
+          <h3>Bubbles</h3>
+          <div class="sw"><span><b>Halos</b><small>A faint glow round every bubble</small></span><i></i></div>
+        </section>
+      </div>
+      <p>베이스맵 고르기와 같은 모양. 그림을 보고 바로 고를 수 있어요.</p>
+    </div>
+    <div class="opt">
+      <span class="tag">1-나 · 목록</span>
+      <div class="panel">
+        <div class="tabs"><span>Map</span><span class="on">Effects</span><span>Interaction</span><span>Export</span></div>
+        <section class="list">
+          <h3>3D look</h3>
+          <div class="item on"><img src="img/a.png" alt=""><span><b>Glow</b><small>A · 겹치는 기둥이 빛처럼 밝아짐</small></span><i class="dot"></i></div>
+          <div class="item"><img src="img/c1.png" alt=""><span><b>Solid</b><small>C · 단단한 색, 낮은 해의 음영</small></span><i class="dot"></i></div>
+        </section>
+        <section>
+          <h3>Bubbles</h3>
+          <div class="sw"><span><b>Halos</b><small>A faint glow round every bubble</small></span><i></i></div>
+        </section>
+      </div>
+      <p>설명이 더 길게 들어가요. 패널이 조금 더 차분해 보여요.</p>
+    </div>
+  </div>
+
+  <h2><b>2</b>C(Solid)에 빛을 얼마나 줄지</h2>
+  <p class="hint">해·주변광 세기는 kepler에서 1이 최대라 더 올릴 수 없어서, 해의 높이·그림자·투명도로 밝기를 바꿨어요.</p>
+  <div class="shots">
+    <figure class="ref"><img src="img/a.png" alt=""><figcaption><b>참고 · A</b>Glow (가산 혼합), 오후 4시 반 해</figcaption></figure>
+    <figure><img src="img/c0.png" alt=""><figcaption><b>C0</b>지금의 C — 오후 4시 반 낮은 해, 그림자 0.45, 불투명도 85%</figcaption></figure>
+    <figure><img src="img/c1.png" alt=""><figcaption><b>C1</b>정오의 높은 해 + 흰 주변광, 그림자 0.2 — 윗면이 밝아짐</figcaption></figure>
+    <figure><img src="img/c2.png" alt=""><figcaption><b>C2</b>C1 + 불투명도 100% — 색이 더 진하고 선명</figcaption></figure>
+    <figure class="ref"><img src="img/c2-80.png" alt=""><figcaption><b>C2 · 80%</b>C2의 빛(정오 해, 흰 주변광, 그림자 0.2) + 불투명도 80% — 요청하신 것</figcaption></figure>
+    <figure><img src="img/c3.png" alt=""><figcaption><b>C3</b>빛·그림자 효과 끔, 불투명도 100% — 평평하고 가장 밝은 색 (입체감은 줄어듦)</figcaption></figure>
+  </div>
+</main>
+</body>
+</html>

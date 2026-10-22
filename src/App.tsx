@@ -6,6 +6,7 @@ import AutoSizer from 'react-virtualized/dist/commonjs/AutoSizer';
 import {loadUhus, type UhusData} from './data/uhus';
 import {mapConfig} from './data/mapConfig';
 import Overlay from './overlay/Overlay';
+import Landing, {landingWanted} from './overlay/Landing';
 import {keplerTheme} from './kepler/theme';
 import {SettingsHeaderFactory} from './kepler/SettingsHeader';
 
@@ -18,6 +19,8 @@ export default function App() {
   const dispatch = useDispatch();
   const [data, setData] = useState<UhusData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // the opening page, over the app while it loads (Landing.tsx)
+  const [landing, setLanding] = useState(landingWanted);
   const started = useRef(false);
 
   useEffect(() => {
@@ -52,6 +55,7 @@ export default function App() {
       </div>
       <Overlay data={data} />
       {error && <div className="load-error">Data failed to load: {error}</div>}
+      {landing && <Landing onDone={() => setLanding(false)} />}
     </div>
   );
 }

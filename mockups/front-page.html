@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Front Page Mockup</title>
+<!-- A mockup of the atlas's front page, to choose the UI before it goes into the app.
+     Not part of the build: served by the dev server at /mockups/front-page.html, and it
+     draws the real neighbourhoods from /data. Each choice is a data-* attribute on <body>;
+     the panel on the right switches them and keeps them in the URL. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,300;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gap: 16px; --topbar-h: 52px; --card-h: 92px; --focus-w: 300px; --rail-w: 72px;
+  --inset: calc(var(--gap) + var(--rail-w) + var(--gap));
+  --ink: #eef2f7; --ink-2: #a9b2bf; --ink-3: #6f7886;
+  --glass-bg: rgba(16, 19, 24, 0.55); --glass-solid: rgba(16, 19, 24, 0.86); --glass-line: rgba(255, 255, 255, 0.08);
+  --accent: #e8a35c; --serif: 'Cormorant Garamond', Georgia, serif; --mono: 'IBM Plex Mono', monospace;
+  font-family: Inter, Pretendard, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased; color: var(--ink);
+}
+body[data-menu="b"] { --rail-w: 52px; }
+body[data-menu="c"] { --inset: var(--gap); }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0d10; }
+button { font: inherit; color: inherit; }
+svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- map ---------- */
+#map { position: absolute; inset: 0; width: 100%; height: 100%; }
+#map .dong { stroke-width: 0.6; transition: opacity 0.2s; }
+body[data-borders="dark"] #map .dong { stroke: rgba(10, 12, 16, 0.85); }
+body[data-borders="light"] #map .dong { stroke: rgba(236, 240, 246, 0.35); stroke-width: 0.5; }
+body[data-borders="none"] #map .dong { stroke: none; }
+#map .gu { fill: none; stroke: rgba(236, 240, 246, 0.6); stroke-width: 1; stroke-dasharray: 5 4; pointer-events: none; }
+#map .picked { fill: none; stroke: #fff; stroke-width: 2; pointer-events: none; }
+#map .gu-label { font: 600 10px Inter, sans-serif; letter-spacing: 0.08em; fill: #fff; paint-order: stroke;
+  stroke: rgba(10, 12, 15, 0.8); stroke-width: 3px; text-anchor: middle; pointer-events: none; }
+.vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 55% 50%, transparent 55%, rgba(0,0,0,0.55) 100%); }
+.frost { position: absolute; left: 0; top: 0; bottom: calc(var(--gap) + var(--card-h) / 2);
+  width: calc(var(--inset) + var(--focus-w) + 14px); pointer-events: none;
+  background: rgba(6, 8, 11, 0.18); backdrop-filter: blur(8px) brightness(0.62) saturate(0.8);
+  -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
+
+.glass { background: var(--glass-bg); border: 1px solid var(--glass-line); border-radius: 18px;
+  backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); }
+
+/* ---------- top bar ---------- */
+.topbar { position: absolute; z-index: 30; top: 8px; left: var(--gap); right: var(--gap); height: var(--topbar-h);
+  display: flex; align-items: center; gap: 20px; padding: 0 6px 0 22px; box-sizing: border-box;
+  background: rgba(16, 19, 24, 0.3); border-radius: 999px; backdrop-filter: blur(20px) saturate(140%); }
+.brand { flex: none; display: flex; align-items: center; gap: 12px; white-space: nowrap; text-shadow: 0 1px 10px rgba(0,0,0,0.5); }
+.brand-mark { color: #DDE8FF; font-size: 20px; }
+.brand-eyebrow { display: none; }
+/* A — tracked capitals (the earlier atlas) */
+body[data-brand="a"] .brand-name { font-size: 17px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; }
+/* B — the magazine serif, like the place name */
+body[data-brand="b"] .brand-name { font-family: var(--serif); font-size: 27px; font-weight: 500; letter-spacing: 0.01em; color: #F4F1EA; }
+body[data-brand="b"] .brand-mark { font-size: 18px; }
+/* C — a mono eyebrow over smaller capitals */
+body[data-brand="c"] .brand-text { display: flex; flex-direction: column; gap: 3px; }
+body[data-brand="c"] .brand-eyebrow { display: block; font: 9.5px var(--mono); letter-spacing: 0.22em; color: var(--accent); }
+body[data-brand="c"] .brand-name { font-size: 14px; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; }
+
+.tabs { display: none; gap: 2px; padding: 4px; }
+body[data-menu="c"] .tabs { display: flex; }
+.tabs button { background: none; border: 0; padding: 7px 16px; border-radius: 999px; color: var(--ink-2); cursor: pointer; }
+.tabs button.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+.tools { flex: none; margin-left: auto; display: flex; gap: 6px; }
+.icon-btn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(255,255,255,0.06); cursor: pointer;
+  display: inline-grid; place-items: center; color: var(--ink); }
+.icon-btn:hover { background: rgba(255,255,255,0.14); }
+.view-3d { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+
+/* ---------- search ---------- */
+.search { position: relative; display: none; align-items: center; height: 40px; border-radius: 999px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); }
+.search:focus-within { background: rgba(16,19,24,0.92); border-color: rgba(232,163,92,0.45); }
+.search .i { margin: 0 10px 0 15px; color: var(--ink-3); width: 16px; height: 16px; }
+.search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 13.5px; color: var(--ink); }
+.search input::placeholder { color: var(--ink-3); }
+.kbd { flex: none; margin-right: 12px; padding: 1px 6px; border-radius: 6px; font: 11px var(--mono); color: var(--ink-3);
+  border: 1px solid rgba(255,255,255,0.14); }
+/* A — in the middle of the top bar */
+body[data-search="a"] .search.in-bar { display: flex; flex: 1 1 auto; max-width: 560px; margin: 0 auto; }
+body[data-search="a"][data-menu="c"] .search.in-bar { max-width: 380px; }
+/* B — at the head of the left panel */
+body[data-search="b"] .search.in-panel { display: flex; margin-bottom: 18px; }
+/* C — a button in the bar, opening a palette in the middle of the screen */
+.search-btn { display: none; }
+body[data-search="c"] .search-btn { display: inline-grid; }
+body[data-search="c"] .tabs, body[data-search="b"] .tabs { margin-left: auto; }
+body[data-search="c"][data-menu="c"] .tools, body[data-search="b"][data-menu="c"] .tools { margin-left: 0; }
+.results { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 2; margin: 0; padding: 6px; list-style: none;
+  max-height: 380px; overflow-y: auto; border-radius: 16px; background: rgba(16,19,24,0.95); border: 1px solid var(--glass-line);
+  box-shadow: 0 24px 60px -18px rgba(0,0,0,0.75); }
+.results:empty { display: none; }
+.results .grp { padding: 10px 10px 4px; font: 10px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
+.results button { width: 100%; display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: none; color: var(--ink-2); text-align: left; cursor: pointer; font-size: 13.5px; }
+.results button:hover, .results button.on { background: rgba(255,255,255,0.08); color: var(--ink); }
+.results small { margin-left: auto; color: var(--ink-3); font-size: 11px; }
+.palette-scrim { position: absolute; inset: 0; z-index: 40; display: none; background: rgba(3,5,10,0.55); backdrop-filter: blur(4px); }
+.palette-scrim.open { display: block; }
+.palette { position: absolute; left: 50%; top: 16vh; width: min(600px, calc(100% - 40px)); transform: translateX(-50%); }
+.palette .search { display: flex; height: 52px; border-radius: 16px; background: rgba(16,19,24,0.95); }
+.palette .search input { font-size: 16px; }
+
+/* ---------- rail ---------- */
+.rail { position: absolute; z-index: 30; left: var(--gap); top: calc(8px + var(--topbar-h) + 12px); bottom: var(--gap);
+  width: var(--rail-w); box-sizing: border-box; padding: 8px 6px; display: flex; flex-direction: column; gap: 4px; }
+body[data-menu="c"] .rail { display: none; }
+.rail button { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 11px 0 9px;
+  border: 0; border-radius: 12px; background: none; color: var(--ink-3); font-size: 10.5px; cursor: pointer; }
+.rail button:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
+.rail button.on { color: var(--ink); background: rgba(255,255,255,0.1); }
+.rail button.on .i { color: var(--accent); }
+.rail .foot { margin-top: auto; display: flex; flex-direction: column; padding-top: 6px; border-top: 1px solid var(--glass-line); }
+/* B — icons only; the label shows beside the icon on hover */
+body[data-menu="b"] .rail { padding: 8px 5px; }
+body[data-menu="b"] .rail button { padding: 11px 0; }
+body[data-menu="b"] .rail button span { position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%);
+  padding: 5px 10px; border-radius: 8px; background: rgba(16,19,24,0.95); border: 1px solid var(--glass-line);
+  font-size: 12px; color: var(--ink); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+body[data-menu="b"] .rail button:hover span { opacity: 1; }
+
+/* ---------- focus block (left) ---------- */
+.focus { position: absolute; left: calc(var(--inset) + 6px); top: calc(var(--topbar-h) + var(--gap) * 3); width: var(--focus-w);
+  text-shadow: 0 1px 12px rgba(0,0,0,0.6); }
+.crumbs-row { display: flex; align-items: center; justify-content: space-between; }
+.crumbs { font-size: 11px; letter-spacing: 0.14em; color: var(--ink-2); }
+.grain { display: flex; gap: 2px; padding: 2px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass-solid); }
+.grain span { padding: 3px 10px; border-radius: 999px; font-size: 11px; color: var(--ink-3); }
+.grain span.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+.place { margin: 8px 0 16px; white-space: nowrap; }
+/* A — the magazine serif, upright */
+body[data-place="a"] .place { font-family: var(--serif); font-size: 64px; font-weight: 500; line-height: 0.98; letter-spacing: -0.01em; color: #F4F1EA; }
+/* B — the serif in light italic */
+body[data-place="b"] .place { font-family: var(--serif); font-size: 70px; font-weight: 300; font-style: italic; line-height: 0.95; color: #F4F1EA; }
+/* C — the sans as it was */
+body[data-place="c"] .place { font-size: 42px; font-weight: 500; line-height: 1.05; letter-spacing: -0.025em; }
+.pickers { display: flex; gap: 8px; margin-bottom: 14px; }
+.pickers div { flex: 1; padding: 7px 10px; border-radius: 10px; background: var(--glass-solid); border: 1px solid var(--glass-line);
+  font-size: 12.5px; display: flex; justify-content: space-between; text-shadow: none; }
+.pickers div::after { content: '⌄'; color: var(--ink-3); }
+.lc { border-top: 1px solid var(--glass-line); padding: 12px 0 14px; }
+.lc-theme { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
+.lc-theme small { margin-left: 6px; color: var(--ink-3); letter-spacing: 0.04em; }
+.lc-name { margin-top: 6px; font-size: 14px; }
+.lc-value { margin-top: 2px; font-size: 22px; font-weight: 300; }
+.lc-value small { font-size: 12px; color: var(--ink-2); margin-left: 4px; }
+.ramp { margin-top: 8px; height: 5px; width: 150px; border-radius: 3px; }
+.chip { display: inline-flex; margin-top: 10px; padding: 4px 11px; border-radius: 999px; font-size: 11px; color: var(--accent);
+  border: 1px solid rgba(232,163,92,0.35); background: rgba(255,255,255,0.05); }
+
+/* ---------- right cards ---------- */
+.graph { position: absolute; right: var(--gap); top: calc(8px + var(--topbar-h) + 12px); width: 300px; height: 200px; padding: 12px 14px; box-sizing: border-box; }
+.card-title { font-size: 13px; }
+.graph svg { width: 100%; height: 140px; margin-top: 8px; }
+.time { position: absolute; right: var(--gap); bottom: calc(var(--gap) + var(--card-h) + 12px); width: 300px; padding: 14px; box-sizing: border-box; }
+.time-date { font-size: 20px; font-weight: 300; }
+.time-day { font-size: 10px; letter-spacing: 0.14em; color: var(--ink-3); margin-top: 2px; }
+.time svg { width: 100%; height: 56px; margin: 10px 0; }
+.time-foot { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); }
+
+/* ---------- bottom cards ---------- */
+.cards { position: absolute; left: var(--inset); right: var(--gap); bottom: var(--gap); display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.cards > div { height: var(--card-h); box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+.cards b { font-size: 10px; font-weight: 400; letter-spacing: 0.16em; color: var(--ink-2); }
+.cards strong { font-size: 22px; font-weight: 300; }
+.cards small { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- the mockup's own panel: amber and dashed, so it never reads as part of the UI ---------- */
+.mock { position: absolute; z-index: 50; right: var(--gap); top: calc(8px + var(--topbar-h) + 12px); width: 300px;
+  padding: 14px 16px 16px; box-sizing: border-box; border-radius: 16px; background: rgba(28, 22, 14, 0.94);
+  border: 1px dashed rgba(232,163,92,0.6); box-shadow: 0 24px 60px -18px rgba(0,0,0,0.8); font-size: 12.5px; color: #f1e6d6; }
+.mock.closed > :not(.mock-head) { display: none; }
+.mock-head { display: flex; align-items: center; justify-content: space-between; cursor: grab; user-select: none; }
+.mock-head:active { cursor: grabbing; }
+.mock-head b { font: 500 10.5px var(--mono); letter-spacing: 0.18em; color: var(--accent); }
+.mock-head span { color: #b9a68a; font-size: 11px; }
+.mock fieldset { border: 0; margin: 12px 0 0; padding: 0; }
+.mock legend { padding: 0; margin-bottom: 6px; font-size: 11.5px; color: #d8c7ad; }
+.mock .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; padding: 2px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+.mock .seg button { padding: 6px 4px; border: 0; border-radius: 8px; background: none; color: #b9a68a; font-size: 11.5px; cursor: pointer; line-height: 1.25; }
+.mock .seg button b { display: block; font: 500 10px var(--mono); color: inherit; }
+.mock .seg button.on { background: rgba(232,163,92,0.22); color: #fff4e3; }
+.mock-foot { display: flex; gap: 8px; margin-top: 14px; }
+.mock-foot button { flex: 1; padding: 7px; border-radius: 9px; border: 1px solid rgba(232,163,92,0.4); background: none; color: #f1e6d6; cursor: pointer; font-size: 12px; }
+.mock-foot button:hover { background: rgba(232,163,92,0.15); }
+.mock-note { margin-top: 10px; font-size: 11px; color: #9c8b72; line-height: 1.45; }
+</style>
+</head>
+<body data-brand="a" data-place="a" data-menu="a" data-search="a" data-borders="dark">
+
+<svg id="map" aria-label="Seoul neighbourhoods"></svg>
+<div class="vignette"></div>
+<div class="frost"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">✧</span>
+    <span class="brand-text"><span class="brand-eyebrow">UHUS · URBAN HEAT / URBAN SALES</span><span class="brand-name">Seoul Data Atlas</span></span>
+  </div>
+  <nav class="tabs"><button class="on">Map</button><button>Dashboard</button><button>Data</button><button>About</button><button>Settings</button></nav>
+  <div class="search in-bar">
+    <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input placeholder="Search a district, neighbourhood or variable" /><span class="kbd">/</span><ul class="results"></ul>
+  </div>
+  <div class="tools">
+    <button class="icon-btn search-btn" title="Search (Ctrl+K)" onclick="openPalette()"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
+    <button class="icon-btn" title="Back to all of Seoul" onclick="pick(null)"><svg class="i" viewBox="0 0 24 24"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button class="icon-btn view-3d">3D</button>
+    <button class="icon-btn">⛶</button>
+  </div>
+</header>
+
+<nav class="rail glass">
+  <button class="on"><svg class="i" viewBox="0 0 24 24"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg><span>Map</span></button>
+  <button><svg class="i" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Dashboard</span></button>
+  <button><svg class="i" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg><span>Data</span></button>
+  <button><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg><span>About</span></button>
+  <div class="foot"><button><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg><span>Settings</span></button></div>
+</nav>
+
+<section class="focus">
+  <div class="search in-panel">
+    <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input placeholder="Search a place or variable" /><span class="kbd">/</span><ul class="results"></ul>
+  </div>
+  <div class="crumbs-row"><span class="crumbs" id="crumbs">SEOUL METROPOLITAN CITY</span><span class="grain"><span>Gu</span><span class="on">Dong</span></span></div>
+  <h1 class="place" id="place">Seoul</h1>
+  <div class="pickers"><div id="pick-gu">All gu</div><div>Pick a gu first</div></div>
+  <div class="lc">
+    <div class="lc-theme">Insights <small>2024</small></div>
+    <div class="lc-name">RHSI</div>
+    <div class="lc-value">−0.05<small>log-ratio · mean</small></div>
+    <div class="ramp" style="background: linear-gradient(90deg, #7a1f5c, #c45a93, #cfc4d6, #4fb3aa, #1d6f73)"></div>
+    <span class="chip">Linked · one map</span>
+  </div>
+  <div class="lc">
+    <div class="lc-theme">Environment <small>2024-01-01</small></div>
+    <div class="lc-name">Max temperature (daily)</div>
+    <div class="lc-value">6.68<small>°C · mean</small></div>
+    <div class="ramp" style="background: linear-gradient(90deg, #2a2e3a, #3c6f86, #4fb3aa)"></div>
+  </div>
+</section>
+
+<aside class="graph glass">
+  <div class="card-title">Relationship</div>
+  <svg id="scatter" viewBox="0 0 270 140" preserveAspectRatio="none"></svg>
+</aside>
+<aside class="time glass">
+  <div class="time-date">2024-01-01</div><div class="time-day">MONDAY</div>
+  <svg id="spark" viewBox="0 0 270 56" preserveAspectRatio="none"></svg>
+  <div class="time-foot"><span>▶ &nbsp;Max temperature (daily)</span><span style="color: var(--ink)">6.68 °C</span></div>
+</aside>
+
+<div class="cards">
+  <div class="glass"><b>ENVIRONMENT</b><strong>6.68</strong><small>Max temperature (daily)</small></div>
+  <div class="glass"><b>PEOPLE</b><strong>0.18</strong><small>Elderly</small></div>
+  <div class="glass"><b>URBAN FORM</b><strong>0.39</strong><small>Residential</small></div>
+  <div class="glass"><b>ECONOMY</b><strong>1111.9억</strong><small>Retail sales (daily)</small></div>
+  <div class="glass"><b>MOBILITY</b><strong>0.44</strong><small>Subway access</small></div>
+  <div class="glass"><b>INSIGHTS</b><strong>−0.05</strong><small>RHSI</small></div>
+</div>
+
+<div class="palette-scrim" id="scrim" onclick="if (event.target === this) closePalette()">
+  <div class="palette">
+    <div class="search">
+      <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input placeholder="Search a district, neighbourhood or variable" /><span class="kbd">esc</span><ul class="results"></ul>
+    </div>
+  </div>
+</div>
+
+<aside class="mock" id="mock">
+  <div class="mock-head"><b>MOCKUP OPTIONS</b><span>끌어서 이동 · 클릭해서 접기</span></div>
+  <fieldset data-key="brand"><legend>1 · 타이틀 (워드마크)</legend><div class="seg">
+    <button data-v="a"><b>A</b>대문자</button><button data-v="b"><b>B</b>세리프</button><button data-v="c"><b>C</b>2줄</button></div></fieldset>
+  <fieldset data-key="place"><legend>2 · 지역 이름</legend><div class="seg">
+    <button data-v="a"><b>A</b>세리프</button><button data-v="b"><b>B</b>이탤릭</button><button data-v="c"><b>C</b>산세리프</button></div></fieldset>
+  <fieldset data-key="menu"><legend>3 · 메뉴</legend><div class="seg">
+    <button data-v="a"><b>A</b>아이콘+글자</button><button data-v="b"><b>B</b>아이콘만</button><button data-v="c"><b>C</b>상단 탭</button></div></fieldset>
+  <fieldset data-key="search"><legend>4 · 검색</legend><div class="seg">
+    <button data-v="a"><b>A</b>상단 바</button><button data-v="b"><b>B</b>왼쪽 패널</button><button data-v="c"><b>C</b>팝업</button></div></fieldset>
+  <fieldset data-key="borders"><legend>5 · 지역 경계선</legend><div class="seg">
+    <button data-v="dark"><b>A</b>검정</button><button data-v="light"><b>B</b>흰색</button><button data-v="none"><b>C</b>없음</button></div></fieldset>
+  <div class="mock-foot"><button onclick="copyChoice(this)">선택 복사</button><button onclick="history.replaceState(null, '', location.pathname); location.reload()">처음으로</button></div>
+  <div class="mock-note">검색창에 지역 이름을 쳐 보세요 (예: gang). 고른 지역이 지도에 표시돼요. 선택은 주소에 남아서 링크로 공유할 수 있어요.</div>
+</aside>
+
+<script>
+const KEYS = ['brand', 'place', 'menu', 'search', 'borders'];
+const body = document.body;
+
+// ---------- options: body data-* attributes, mirrored in the URL ----------
+const params = new URLSearchParams(location.search);
+for (const k of KEYS) if (params.get(k)) body.dataset[k] = params.get(k);
+function syncButtons() {
+  for (const fs of document.querySelectorAll('.mock fieldset')) {
+    for (const b of fs.querySelectorAll('button')) b.classList.toggle('on', b.dataset.v === body.dataset[fs.dataset.key]);
+  }
+}
+document.querySelectorAll('.mock fieldset').forEach((fs) => fs.addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  body.dataset[fs.dataset.key] = b.dataset.v;
+  const q = new URLSearchParams(KEYS.map((k) => [k, body.dataset[k]]));
+  history.replaceState(null, '', `?${q}`);
+  syncButtons(); fitPlace(); requestAnimationFrame(drawMap);
+}));
+syncButtons();
+// the panel moves by its head; a click without a drag folds it
+{
+  const mock = document.getElementById('mock'), head = mock.querySelector('.mock-head');
+  let start = null;
+  head.addEventListener('pointerdown', (e) => {
+    const r = mock.getBoundingClientRect();
+    start = {x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false};
+    head.setPointerCapture(e.pointerId);
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!start.moved && Math.hypot(dx, dy) < 4) return;
+    start.moved = true;
+    mock.style.right = 'auto';
+    mock.style.left = `${Math.max(0, Math.min(innerWidth - 60, start.left + dx))}px`;
+    mock.style.top = `${Math.max(0, Math.min(innerHeight - 40, start.top + dy))}px`;
+  });
+  head.addEventListener('pointerup', () => { if (start && !start.moved) mock.classList.toggle('closed'); start = null; });
+}
+function copyChoice(btn) {
+  const label = (k) => document.querySelector(`.mock fieldset[data-key="${k}"] button.on b`).textContent;
+  const text = `타이틀 ${label('brand')} · 지역 이름 ${label('place')} · 메뉴 ${label('menu')} · 검색 ${label('search')} · 경계선 ${label('borders')}`;
+  navigator.clipboard?.writeText(text).then(() => { btn.textContent = '복사됨'; setTimeout(() => (btn.textContent = '선택 복사'), 1400); });
+}
+
+// ---------- the map: real neighbourhoods, coloured by RHSI ----------
+const RAMP = ['#7a1f5c', '#a8336f', '#c45a93', '#d79abc', '#cfc4d6', '#8fc6bf', '#4fb3aa', '#2a8f8a', '#1d6f73'];
+let dongs = [], gus = [], picked = null;
+const svg = document.getElementById('map');
+const ring = (coords, P) => coords.map((r) => 'M' + r.map(P).map((p) => p.join(',')).join('L') + 'Z').join('');
+const pathOf = (g, P) => g.type === 'Polygon' ? ring(g.coordinates, P) : g.coordinates.map((c) => ring(c, P)).join('');
+
+function projector() {
+  // the part of the screen not under the panels, as the app's flyTo fits it
+  const css = getComputedStyle(body);
+  const inset = parseFloat(css.getPropertyValue('--inset')) || 16;
+  const left = inset + 320, right = innerWidth - 330, top = 80, bottom = innerHeight - 130;
+  const [x0, y0, x1, y1] = [126.764, 37.413, 127.184, 37.715], k0 = Math.cos(37.56 * Math.PI / 180);
+  const s = Math.min((right - left) / ((x1 - x0) * k0), (bottom - top) / (y1 - y0));
+  const cx = (left + right) / 2, cy = (top + bottom) / 2;
+  return ([lng, lat]) => [+(cx + (lng - (x0 + x1) / 2) * k0 * s).toFixed(1), +(cy - (lat - (y0 + y1) / 2) * s).toFixed(1)];
+}
+function drawMap() {
+  if (!dongs.length) return;
+  const P = projector();
+  const sorted = dongs.map((d) => d.v).filter((v) => v != null).sort((a, b) => a - b);
+  const colour = (v) => v == null ? '#2a2e36' : RAMP[Math.min(RAMP.length - 1, Math.floor(sorted.indexOf(v) / sorted.length * RAMP.length))];
+  let html = '';
+  for (const d of dongs) html += `<path class="dong" d="${pathOf(d.geometry, P)}" fill="${colour(d.v)}" fill-opacity="0.85"><title>${d.dong_name} · ${d.gu_name}</title></path>`;
+  for (const g of gus) html += `<path class="gu" d="${pathOf(g.geometry, P)}"/>`;
+  if (picked) html += `<path class="picked" d="${pathOf(picked.geometry, P)}"/>`;
+  for (const g of gus) { const [x, y] = P(g.centroid); html += `<text class="gu-label" x="${x}" y="${y}">${g.gu_name.toUpperCase()}</text>`; }
+  svg.innerHTML = html;
+}
+addEventListener('resize', drawMap);
+Promise.all(['dong_geometry.json', 'gu_geometry.json', 'dong_metrics.json'].map((f) => fetch(`/data/${f}`).then((r) => r.json())))
+  .then(([dg, gg, metrics]) => {
+    const rhsi = Object.fromEntries(metrics.map((m) => [m.dong_code, m.RHSI_retail]));
+    dongs = dg.map((d) => ({...d, v: rhsi[d.dong_code] ?? null}));
+    gus = gg;
+    drawMap(); drawCards(metrics);
+  });
+
+// ---------- the place name: one line, smaller for long names (as useFitWidth in the app) ----------
+function fitPlace() {
+  const el = document.getElementById('place');
+  el.style.fontSize = ''; el.style.whiteSpace = '';
+  const full = parseFloat(getComputedStyle(el).fontSize);
+  if (el.scrollWidth > el.clientWidth) el.style.fontSize = Math.max(30, Math.floor(full * el.clientWidth / el.scrollWidth)) + 'px';
+  if (el.scrollWidth > el.clientWidth) el.style.whiteSpace = 'normal';
+}
+document.fonts.ready.then(fitPlace);
+function pick(p) {
+  picked = p;
+  document.getElementById('place').textContent = p ? (p.dong_name || p.gu_name) : 'Seoul';
+  document.getElementById('crumbs').textContent = !p ? 'SEOUL METROPOLITAN CITY' : p.dong_name ? `SEOUL · ${p.gu_name.toUpperCase()}` : 'SEOUL';
+  document.getElementById('pick-gu').textContent = p ? p.gu_name : 'All gu';
+  fitPlace(); drawMap();
+}
+
+// ---------- search (all three placements share it) ----------
+const norm = (s) => s.toLowerCase().replace(/[\s·-]/g, '');
+function hits(q) {
+  q = norm(q); if (!q) return [];
+  const best = (xs, name, n) => xs.map((x) => [x, norm(name(x))]).filter(([, s]) => s.includes(q))
+    .sort((a, b) => (a[1].startsWith(q) ? 0 : 1) - (b[1].startsWith(q) ? 0 : 1)).slice(0, n).map(([x]) => x);
+  return [...best(gus, (g) => g.gu_name, 4).map((p) => ['Districts', p, p.gu_name, 'District']),
+          ...best(dongs, (d) => d.dong_name, 6).map((p) => ['Neighbourhoods', p, p.dong_name, p.gu_name])];
+}
+for (const box of document.querySelectorAll('.search')) {
+  const input = box.querySelector('input'), list = box.querySelector('.results');
+  let found = [], at = 0;
+  const render = () => {
+    list.innerHTML = found.map(([grp, , name, sub], i) =>
+      `${i === 0 || found[i - 1][0] !== grp ? `<li class="grp">${grp}</li>` : ''}<li><button class="${i === at ? 'on' : ''}" data-i="${i}">${name}<small>${sub}</small></button></li>`).join('')
+      || (input.value ? '<li class="grp">Nothing by that name</li>' : '');
+  };
+  const go = (i) => { if (!found[i]) return; pick(found[i][1]); input.value = ''; found = []; render(); input.blur(); closePalette(); };
+  input.addEventListener('input', () => { found = hits(input.value); at = 0; render(); });
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { at = Math.min(found.length - 1, at + 1); render(); e.preventDefault(); }
+    if (e.key === 'ArrowUp') { at = Math.max(0, at - 1); render(); e.preventDefault(); }
+    if (e.key === 'Enter') go(at);
+    if (e.key === 'Escape') { input.value = ''; found = []; render(); input.blur(); closePalette(); }
+  });
+  input.addEventListener('blur', () => setTimeout(() => { list.innerHTML = ''; }, 150));
+  list.addEventListener('mousedown', (e) => { const b = e.target.closest('button'); if (b) { e.preventDefault(); go(+b.dataset.i); } });
+}
+function openPalette() { document.getElementById('scrim').classList.add('open'); document.querySelector('.palette input').focus(); }
+function closePalette() { document.getElementById('scrim').classList.remove('open'); }
+addEventListener('keydown', (e) => {
+  const typing = e.target.closest?.('input');
+  if ((e.key === '/' && !typing) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
+    e.preventDefault();
+    const where = body.dataset.search;
+    if (where === 'c') openPalette(); else document.querySelector(where === 'b' ? '.search.in-panel input' : '.search.in-bar input').focus();
+  }
+});
+
+// ---------- the right-hand cards: a scatter of the real values, a year of temperatures ----------
+function drawCards(metrics) {
+  const xs = metrics.filter((m) => m.RHSI_retail != null && m.n_hot_days != null);
+  const [a, b] = [Math.min(...xs.map((m) => m.n_hot_days)), Math.max(...xs.map((m) => m.n_hot_days))];
+  document.getElementById('scatter').innerHTML = xs.map((m) => {
+    const x = 6 + (m.n_hot_days - a) / (b - a || 1) * 258, y = 70 - m.RHSI_retail * 90;
+    return `<circle cx="${x.toFixed(1)}" cy="${Math.max(4, Math.min(136, y)).toFixed(1)}" r="1.6" fill="${m.RHSI_retail < 0 ? '#c45a93' : '#4fb3aa'}" fill-opacity="0.75"/>`;
+  }).join('');
+  let d = '';
+  for (let i = 0; i <= 120; i++) {
+    const t = i / 120, v = Math.sin(t * Math.PI) * 0.75 + Math.sin(i * 1.7) * 0.08 + Math.sin(i * 0.37) * 0.06;
+    d += `${i ? 'L' : 'M'}${(t * 270).toFixed(1)},${(52 - v * 46).toFixed(1)}`;
+  }
+  document.getElementById('spark').innerHTML = `<path d="${d}L270,56L0,56Z" fill="rgba(232,163,92,0.18)"/><path d="${d}" fill="none" stroke="#e8a35c" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`;
+}
+</script>
+</body>
+</html>

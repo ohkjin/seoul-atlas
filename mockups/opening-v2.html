@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Opening Page Mockup v2</title>
+<!-- Choice mockup, nothing applied: the earlier atlas's landing (seoul-data-atlas/index.html
+     #landing, css/styles.css .landing…) rebuilt as it was — dark field, the light beam, the
+     serif title, the white pill — with its never-drawn map canvas filled by urban white-line
+     graphics from real data (data/landing_lines.json: OSM arterial and mid roads, subway lines,
+     the largest water bodies, the districts; Seoul's 2024 daily max temperature and retail
+     sales). The live app sits behind it, so "Explore The Atlas" shows the hand-off.
+     Served by the dev server at /mockups/opening-v2.html. -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;500&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #05070B; --beam: #DDE8FF; --mono: 'IBM Plex Mono', monospace; --accent: #e8a35c; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); font-family: Manrope, sans-serif; }
+#app { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+
+/* ---- the earlier landing, as it was (styles.css lines 35-127) ---- */
+.landing { position: fixed; inset: 0; z-index: 5; background: var(--bg); overflow: hidden; display: flex;
+  align-items: center; justify-content: center; transition: opacity 0.9s ease; }
+.landing.leaving { opacity: 0; pointer-events: none; }
+.landing-map { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; animation: mapFadeIn 1.6s ease-out 0.3s forwards; }
+@keyframes mapFadeIn { to { opacity: 1; } }
+.light-beam { position: absolute; top: -10%; left: 50%; width: 2px; height: 0; transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, var(--beam) 35%, var(--beam) 60%, transparent);
+  box-shadow: 0 0 60px 8px rgba(221,232,255,0.55), 0 0 140px 30px rgba(125,167,255,0.25);
+  animation: beamGrow 1.4s ease-out 0.9s forwards; pointer-events: none; z-index: 3; }
+@keyframes beamGrow { to { height: 120%; } }
+.landing-content { position: relative; z-index: 4; text-align: center; display: flex; flex-direction: column; align-items: center;
+  gap: 18px; margin-top: -6vh; }
+.landing-title { font-family: 'Cormorant Garamond', serif; font-weight: 300; font-size: 92px; letter-spacing: 0.04em; color: #F4F1EA;
+  margin: 0; opacity: 0; transform: translateY(10px); animation: fadeUp 1s ease-out 2.0s forwards;
+  text-shadow: 0 0 40px rgba(5,7,11,0.9); }
+@keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+.cta-button { margin-top: 10px; padding: 13px 34px; border-radius: 999px; border: none; background: linear-gradient(180deg, #FFFFFF, #E9EDF5);
+  color: #0B0F17; font-family: Manrope, sans-serif; font-weight: 600; font-size: 14px; letter-spacing: 0.03em; cursor: pointer;
+  opacity: 0; transform: translateY(6px); animation: fadeUp 0.8s ease-out 2.8s forwards; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(233,237,245,0.25); }
+/* a soft dark pool behind the title so the lines never fight it */
+.landing::after { content: ''; position: absolute; left: 50%; top: 44%; width: 900px; height: 360px; transform: translate(-50%, -50%);
+  background: radial-gradient(closest-side, rgba(5,7,11,0.82), rgba(5,7,11,0)); pointer-events: none; z-index: 2; }
+.landing-map { z-index: 1; }
+
+/* the mockup's own panel (amber, dashed: not part of the design) */
+.mock { position: fixed; z-index: 50; right: 16px; top: 16px; width: 270px; padding: 14px 16px 16px; box-sizing: border-box; border-radius: 16px;
+  background: rgba(28, 22, 14, 0.95); border: 1px dashed rgba(232,163,92,0.6); font-size: 12.5px; color: #f1e6d6; box-shadow: 0 24px 60px -18px rgba(0,0,0,0.8); }
+.mock.closed > :not(.mock-head) { display: none; }
+.mock-head { display: flex; justify-content: space-between; cursor: pointer; }
+.mock-head b { font: 500 10.5px var(--mono); letter-spacing: 0.18em; color: var(--accent); }
+.mock-head span { font-size: 11px; color: #b9a68a; }
+.mock .opt { display: block; width: 100%; margin-top: 6px; padding: 9px 10px; border: 0; border-radius: 10px; background: rgba(255,255,255,0.04);
+  color: #d8c7ad; font: inherit; text-align: left; cursor: pointer; line-height: 1.4; }
+.mock .opt b { font: 500 11px var(--mono); color: var(--accent); margin-right: 6px; }
+.mock .opt small { display: block; color: #9c8b72; font-size: 11px; }
+.mock .opt.on { background: rgba(232,163,92,0.22); color: #fff4e3; }
+.mock .replay { margin-top: 12px; width: 100%; padding: 8px; border-radius: 9px; border: 1px solid rgba(232,163,92,0.4); background: none; color: #f1e6d6; cursor: pointer; font: inherit; }
+.mock p { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #9c8b72; }
+</style>
+</head>
+<body>
+<iframe id="app" src="/" title="Seoul Data Atlas"></iframe>
+<div id="landing-host"></div>
+<template id="landing-tpl">
+  <section class="landing">
+    <canvas class="landing-map"></canvas>
+    <div class="light-beam"></div>
+    <div class="landing-content">
+      <h1 class="landing-title">Seoul Data Atlas</h1>
+      <button class="cta-button">Explore The Atlas</button>
+    </div>
+  </section>
+</template>
+
+<aside class="mock" id="mock">
+  <div class="mock-head" onclick="this.parentElement.classList.toggle('closed')"><b>OPENING · v2</b><span>접기 / 펴기</span></div>
+  <button class="opt" data-v="u1"><b>U1</b>Line city<small>간선·이면 도로와 한강을 흰 실선으로, 가운데서 바깥으로 그려짐</small></button>
+  <button class="opt" data-v="u2"><b>U2</b>Transit lights<small>지하철 노선을 흰 선으로, 그 위를 작은 빛이 흘러감</small></button>
+  <button class="opt" data-v="u3"><b>U3</b>Data lines<small>2024년 서울 일 최고기온·소매 매출을 흰 선 그래프로 (실제 데이터)</small></button>
+  <button class="opt" data-v="u4"><b>U4</b>U1 + U3<small>도시 선 위에 데이터 선</small></button>
+  <button class="opt" data-v="u4a"><b>U4·a</b>U4, 더 가볍게<small>도시 선 약 35% 더 흐리게, 그래프 선도 옅게·가늘게</small></button>
+  <button class="opt" data-v="u4b"><b>U4·b</b>U4, 아주 가볍게<small>이면 도로 빼고 간선·한강·구 경계만, 더 흐리게. 그래프도 더 옅게</small></button>
+  <button class="replay" id="replay">↺ 처음부터 다시 보기</button>
+  <p>아직 적용 안 됨. 빛줄기·제목·버튼과 타이밍은 예전 아틀라스 그대로예요. "Explore The Atlas"를 누르면 뒤의 실제 앱으로 넘어가요.</p>
+</aside>
+
+<script>
+let data = null, variant = new URLSearchParams(location.search).get('v') || 'u1', raf = 0;
+const host = document.getElementById('landing-host');
+
+// Seoul's box, with the long axis fitted to the screen and the city kept clear of the edges
+const BOX = [126.764, 37.413, 127.184, 37.715], K0 = Math.cos(37.56 * Math.PI / 180);
+function projector(w, h, scale = 0.86) {
+  const s = Math.min(w * scale / ((BOX[2] - BOX[0]) * K0), h * scale / (BOX[3] - BOX[1]));
+  const cx = w / 2, cy = h / 2 - h * 0.02;
+  return ([lng, lat]) => [cx + (lng - (BOX[0] + BOX[2]) / 2) * K0 * s, cy - (lat - (BOX[1] + BOX[3]) / 2) * s];
+}
+
+function mount() {
+  cancelAnimationFrame(raf);
+  host.innerHTML = '';
+  host.append(document.getElementById('landing-tpl').content.cloneNode(true));
+  const landing = host.querySelector('.landing');
+  landing.querySelector('.cta-button').addEventListener('click', () => {
+    landing.classList.add('leaving'); setTimeout(() => { cancelAnimationFrame(raf); landing.remove(); }, 900);
+  });
+  document.querySelectorAll('.mock .opt').forEach((b) => b.classList.toggle('on', b.dataset.v === variant));
+  if (data) draw(landing.querySelector('canvas'));
+}
+
+function draw(canvas) {
+  const dpr = devicePixelRatio || 1, w = innerWidth, h = innerHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr);
+  const P = projector(w, h);
+  // u4a / u4b: U4, lighter — the city fainter (and, in b, without the side roads), the charts softer
+  const u4 = variant.startsWith('u4');
+  const city = variant === 'u1' || u4, transit = variant === 'u2', charts = variant === 'u3' || u4;
+  const dim = {u4: 0.6, u4a: 0.38, u4b: 0.3}[variant] ?? 1;   // under the charts the city steps back
+  const chartA = {u4a: 0.4, u4b: 0.3}[variant] ?? 0.62;
+  const sideRoads = variant !== 'u4b';
+
+  // every line as projected points, with its distance from the centre for the draw-in
+  const cx = w / 2, cy = h / 2;
+  const prep = (lines) => lines.map((l) => { const pts = l.map(P); const m = pts[Math.floor(pts.length / 2)];
+    return {pts, d: Math.hypot(m[0] - cx, m[1] - cy)}; });
+  const layers = [];
+  if (city) {
+    if (sideRoads) layers.push({lines: prep(data.mid), a: 0.11 * dim, lw: 0.5});
+    layers.push({lines: prep(data.arterial), a: 0.26 * dim, lw: 0.6});
+    layers.push({lines: prep(data.water), a: 0.34 * dim, lw: 0.8, closed: true});
+    layers.push({lines: prep(data.gu), a: 0.16 * dim, lw: 0.6, closed: true, dash: [3, 4]});
+  }
+  if (transit) {
+    layers.push({lines: prep(data.water), a: 0.14, lw: 0.6, closed: true});
+    layers.push({lines: prep(data.subway), a: 0.34, lw: 0.9});
+  }
+  const maxD = Math.hypot(w, h) / 2;
+
+  // U2: lights running along the subway, each on a segment, to and fro
+  const sub = transit ? prep(data.subway).filter((l) => l.pts.length > 1) : [];
+  const lights = transit ? Array.from({length: 240}, () => ({l: sub[Math.floor(Math.random() * sub.length)], t: Math.random(), v: (0.25 + Math.random() * 0.6) * (Math.random() < 0.5 ? 1 : -1)})) : [];
+  const along = (pts, t) => {   // a point at fraction t of a polyline
+    const segs = []; let total = 0;
+    for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(d); total += d; }
+    let goal = t * total;
+    for (let i = 0; i < segs.length; i++) { if (goal <= segs[i] || i === segs.length - 1) { const k = segs[i] ? goal / segs[i] : 0;
+      return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * k, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * k]; } goal -= segs[i]; }
+    return pts[0];
+  };
+
+  // U3: two long data lines across the lower third
+  const chart = (vals, top, height) => {
+    const lo = Math.min(...vals), hi = Math.max(...vals), x0 = w * 0.1, x1 = w * 0.9;
+    return {lo, hi, pts: vals.map((v, i) => [x0 + (x1 - x0) * i / (vals.length - 1), top + height - (v - lo) / (hi - lo || 1) * height]), x0, x1, top, height};
+  };
+  const temp = charts ? chart(data.temp, h * 0.70, h * 0.085) : null;
+  const sales = charts ? chart(data.sales, h * 0.83, h * 0.07) : null;
+  const MONTHS = 'JFMAMJJASOND';
+
+  const start = performance.now();
+  const frame = (now) => {
+    const t = (now - start) / 1000;
+    ctx.clearRect(0, 0, w, h);
+    // the city draws in from the centre outward over 2.4 s
+    const r = Math.min(1, t / 2.4) ** 0.8 * maxD;
+    for (const L of layers) {
+      ctx.strokeStyle = `rgba(236, 240, 246, ${L.a})`; ctx.lineWidth = L.lw; ctx.setLineDash(L.dash || []);
+      ctx.beginPath();
+      for (const {pts, d} of L.lines) { if (d > r) continue; ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); if (L.closed) ctx.closePath(); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if (transit && t > 1.2) {
+      ctx.fillStyle = 'rgba(244, 246, 250, 0.95)'; ctx.shadowColor = 'rgba(221, 232, 255, 0.9)'; ctx.shadowBlur = 6;
+      const fade = Math.min(1, (t - 1.2) / 1.2);
+      ctx.globalAlpha = fade;
+      for (const p of lights) {
+        p.t += p.v * 0.004; if (p.t > 1 || p.t < 0) { p.v = -p.v; p.t = Math.max(0, Math.min(1, p.t)); }
+        const [x, y] = along(p.l.pts, p.t); ctx.beginPath(); ctx.arc(x, y, 1.1, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    }
+    if (charts) {
+      const k = Math.max(0, Math.min(1, (t - 0.6) / 2.6));   // left to right
+      for (const [c, label, unit] of [[temp, '2024 · DAILY MAX TEMPERATURE', '°C'], [sales, 'RETAIL SALES · PER DAY', 'M ₩']]) {
+        const n = Math.max(2, Math.floor(c.pts.length * k));
+        ctx.strokeStyle = 'rgba(236, 240, 246, 0.08)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(c.x0, c.top + c.height + 0.5); ctx.lineTo(c.x1, c.top + c.height + 0.5); ctx.stroke();
+        ctx.strokeStyle = `rgba(244, 246, 250, ${chartA})`; ctx.lineWidth = u4 && variant !== 'u4' ? 0.8 : 1; ctx.lineJoin = 'round';
+        ctx.beginPath(); ctx.moveTo(...c.pts[0]); for (let i = 1; i < n; i++) ctx.lineTo(...c.pts[i]); ctx.stroke();
+        const head = c.pts[n - 1]; if (k < 1) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(head[0], head[1], 2, 0, Math.PI * 2); ctx.fill(); }
+        ctx.globalAlpha = Math.min(1, k * 3);
+        ctx.font = '10px "IBM Plex Mono", monospace'; ctx.fillStyle = 'rgba(169, 178, 191, 0.75)'; ctx.textBaseline = 'bottom';
+        ctx.fillText(label, c.x0, c.top - 6);
+        ctx.textAlign = 'right'; ctx.fillText(`${Math.round(c.lo).toLocaleString()} – ${Math.round(c.hi).toLocaleString()} ${unit}`, c.x1, c.top - 6); ctx.textAlign = 'left';
+        ctx.globalAlpha = 1;
+      }
+      ctx.globalAlpha = Math.min(1, k * 3);
+      ctx.font = '9px "IBM Plex Mono", monospace'; ctx.fillStyle = 'rgba(111, 120, 134, 0.8)'; ctx.textBaseline = 'top';
+      for (let m = 0; m < 12; m++) ctx.fillText(MONTHS[m], sales.x0 + (sales.x1 - sales.x0) * (m + 0.3) / 12, sales.top + sales.height + 8);
+      ctx.globalAlpha = 1;
+    }
+    if (transit || t < 3.6) raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+}
+
+document.querySelectorAll('.mock .opt').forEach((b) => b.addEventListener('click', () => {
+  variant = b.dataset.v; history.replaceState(null, '', `?v=${variant}`); mount();
+}));
+document.getElementById('replay').addEventListener('click', mount);
+addEventListener('resize', () => { const c = host.querySelector('canvas'); if (c && data) { cancelAnimationFrame(raf); draw(c); } });
+fetch('data/landing_lines.json').then((r) => r.json()).then((d) => { data = d; document.fonts.ready.then(mount); });
+</script>
+</body>
+</html>

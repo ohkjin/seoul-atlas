@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clean Mode Mockup</title>
+<!-- Choice mockup, nothing applied: Clean mode (the earlier atlas's "hide every panel, show
+     only the map"). Captures of the real app with the panels hidden for the picture, plus
+     the button that turns it on. Served by the dev server at /mockups/clean-mode.html. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ink: #eef2f7; --ink-2: #a9b2bf; --ink-3: #6f7886; --line: rgba(255,255,255,0.08); --accent: #e8a35c; }
+body { margin: 0; background: #0b0d10; color: var(--ink); font-family: Manrope, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1180px; margin: 0 auto; padding: 36px 24px 60px; }
+h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+.lede { margin: 0 0 30px; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+h2 { display: flex; align-items: baseline; gap: 10px; margin: 40px 0 6px; font-size: 16px; font-weight: 600; }
+h2 b { font: 500 11px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; color: var(--accent); }
+.hint { margin: 0 0 18px; color: var(--ink-3); font-size: 13px; line-height: 1.5; }
+.shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+figure { margin: 0; }
+figure img { display: block; width: 100%; border-radius: 12px; border: 1px solid var(--line); }
+figcaption { margin-top: 8px; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+figcaption b { color: var(--ink); font-weight: 600; margin-right: 6px; }
+figure.ref figcaption b { color: var(--ink-3); }
+
+/* the top-right tool buttons, as in the app */
+.opts { display: flex; gap: 28px; flex-wrap: wrap; }
+.opt { flex: 1 1 320px; max-width: 380px; }
+.tag { display: inline-block; margin-bottom: 10px; padding: 2px 9px; border-radius: 999px; font: 500 11px 'IBM Plex Mono', monospace;
+  color: var(--accent); background: rgba(232,163,92,0.12); }
+.bar { display: flex; gap: 6px; padding: 14px; border-radius: 16px; background: #181b20 url("img/clean-a.png") 50% 2% / 600px no-repeat; }
+.btn { position: relative; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ink-2);
+  background: rgba(16,19,24,0.5); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(16px); font-size: 12px; font-weight: 600; }
+.btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.btn.new { color: var(--ink); border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.btn .tip { position: absolute; top: calc(100% + 8px); right: 0; padding: 5px 10px; border-radius: 8px; white-space: nowrap; font-size: 11.5px; font-weight: 500;
+  color: var(--ink); background: rgba(16,19,24,0.95); border: 1px solid var(--line); }
+.opt p { margin: 44px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Clean mode — 목업</h1>
+  <p class="lede">아직 적용하지 않았어요. 예전 아틀라스의 "Clean mode — 모든 패널을 숨기고 지도만"을 다시 만드는 거예요.<br>
+    그림은 실제 앱에서 패널을 숨겨 찍은 것이고, 오른쪽 위의 <b>✕ Exit clean mode · Esc</b> 버튼으로(또는 Esc 키로) 돌아와요. 1과 2에서 하나씩 골라 주세요.</p>
+
+  <h2><b>1</b>Clean mode에서 무엇을 남길지</h2>
+  <p class="hint">지도 위 구·동 이름과 점선 경계는 지도의 일부라 셋 다 남아요. 지도를 끌고, 확대하고, 3D로 기울이는 건 그대로 돼요.</p>
+  <div class="shots">
+    <figure><img src="img/clean-a.png" alt=""><figcaption><b>A · 지도만</b>모든 패널과 상단 바, 아래 상태 바까지 숨김. 나가기 버튼만 남음</figcaption></figure>
+    <figure><img src="img/clean-b.png" alt=""><figcaption><b>B · 제목 남기기</b>왼쪽 위에 지역 이름(Seoul)만 — 잡지 표지처럼</figcaption></figure>
+    <figure><img src="img/clean-c.png" alt=""><figcaption><b>C · 제목 + 상태 바</b>B에 아래 상태 바(좌표·줌·방위)까지</figcaption></figure>
+    <figure class="ref"><img src="img/clean-a3d.png" alt=""><figcaption><b>참고 · A를 3D에서</b>Glow 모습 그대로, 패널 없이</figcaption></figure>
+  </div>
+
+  <h2><b>2</b>켜는 버튼</h2>
+  <p class="hint">오른쪽 위 도구 버튼(제자리 · 3D · 전체 화면) 쪽에 둬요. 주황 테두리가 새로 생기는 버튼이에요.</p>
+  <div class="opts">
+    <div class="opt">
+      <span class="tag">2-가 · 버튼 하나 더</span>
+      <div class="bar">
+        <span class="btn"><svg viewBox="0 0 24 24"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="btn">3D</span>
+        <span class="btn new"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg><span class="tip">Clean mode — only the map</span></span>
+        <span class="btn">⛶</span>
+      </div>
+      <p>Clean mode와 브라우저 전체 화면이 따로따로. 둘 다 켜면 화면 전체가 지도만.</p>
+    </div>
+    <div class="opt">
+      <span class="tag">2-나 · 전체 화면과 합치기</span>
+      <div class="bar">
+        <span class="btn"><svg viewBox="0 0 24 24"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></span>
+        <span class="btn">3D</span>
+        <span class="btn new"><svg viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/></svg><span class="tip">Full screen — only the map</span></span>
+      </div>
+      <p>⛶ 자리에 하나만. 누르면 브라우저 전체 화면 + 패널 숨김이 한 번에, Esc 한 번으로 둘 다 풀려요. 발표·시연용으로 간단.</p>
+    </div>
+  </div>
+</main>
+</body>
+</html>

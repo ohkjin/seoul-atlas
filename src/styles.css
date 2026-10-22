@@ -124,6 +124,35 @@ button { font: inherit; color: inherit; }
 .sr-sub { flex: none; font-size: 11px; color: var(--ink-3); }
 .sr-empty { padding: 12px 10px; font-size: 13px; color: var(--ink-3); }
 
+/* ---------- opening page (Landing.tsx): the earlier atlas's landing, its CSS and timings
+   (seoul-data-atlas/css/styles.css .landing…), over the app while it loads ---------- */
+.landing { position: fixed; inset: 0; z-index: 2000; background: #05070B; overflow: hidden; display: flex;
+  align-items: center; justify-content: center; transition: opacity 0.9s ease; }
+.landing.leaving { opacity: 0; pointer-events: none; }
+.landing-map { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; opacity: 0;
+  animation: landingMapIn 1.6s ease-out 0.3s forwards; }
+@keyframes landingMapIn { to { opacity: 1; } }
+/* a soft dark pool behind the title, so the lines never fight it */
+.landing::after { content: ''; position: absolute; z-index: 2; left: 50%; top: 44%; width: 900px; height: 360px;
+  transform: translate(-50%, -50%); background: radial-gradient(closest-side, rgba(5,7,11,0.82), rgba(5,7,11,0)); pointer-events: none; }
+.light-beam { position: absolute; z-index: 3; top: -10%; left: 50%; width: 2px; height: 0; transform: translateX(-50%);
+  background: linear-gradient(180deg, transparent, #DDE8FF 35%, #DDE8FF 60%, transparent);
+  box-shadow: 0 0 60px 8px rgba(221,232,255,0.55), 0 0 140px 30px rgba(125,167,255,0.25);
+  animation: landingBeam 1.4s ease-out 0.9s forwards; pointer-events: none; }
+@keyframes landingBeam { to { height: 120%; } }
+.landing-content { position: relative; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 18px;
+  margin-top: -6vh; text-align: center; }
+/* 92px as before; smaller on a narrow screen, so the name stays on one line */
+.landing-title { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 300; font-size: clamp(44px, 7.4vw, 92px);
+  letter-spacing: 0.04em; color: #F4F1EA; white-space: nowrap; text-shadow: 0 0 40px rgba(5,7,11,0.9);
+  opacity: 0; transform: translateY(10px); animation: landingUp 1s ease-out 2.0s forwards; }
+@keyframes landingUp { to { opacity: 1; transform: translateY(0); } }
+.cta-button { margin-top: 10px; padding: 13px 34px; border: none; border-radius: 999px; background: linear-gradient(180deg, #FFFFFF, #E9EDF5);
+  color: #0B0F17; font-family: var(--sans); font-weight: 600; font-size: 14px; letter-spacing: 0.03em; cursor: pointer;
+  opacity: 0; transform: translateY(6px); animation: landingUp 0.8s ease-out 2.8s forwards; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.cta-button:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(233,237,245,0.25); }
+.cta-button:focus-visible { outline: 2px solid rgba(232, 163, 92, 0.7); outline-offset: 3px; }
+
 /* ---------- Clean mode (Overlay.tsx; mockups/clean-mode.html, C): only the map, the place's
    name and the status bar; the map's own names, boundaries and tooltip stay ---------- */
 body.clean-mode .topbar, body.clean-mode .rail, body.clean-mode .graph-card, body.clean-mode .time-card,

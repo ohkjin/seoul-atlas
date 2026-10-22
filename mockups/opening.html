@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Opening Page Mockup</title>
+<!-- Choice mockup, nothing applied: what the atlas shows first. The real app runs in the
+     frame below (1440×900, scaled to fit); each option is laid over it the way it would be
+     in the app, and its button shows how it hands over to the map. Option B plays the
+     keyframes of the opening film in ../opening-video (script.json). Served by the dev
+     server at /mockups/opening.html. -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ink: #eef2f7; --ink-2: #a9b2bf; --ink-3: #6f7886; --accent: #e8a35c;
+  --serif: 'Cormorant Garamond', Georgia, serif; --mono: 'IBM Plex Mono', monospace; --sans: Manrope, sans-serif; }
+html, body { margin: 0; height: 100%; background: #07090c; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+#stage { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; transform-origin: 0 0; overflow: hidden; background: #0b0d10; }
+#app { position: absolute; inset: 0; width: 1440px; height: 900px; border: 0; }
+.layer { position: absolute; inset: 0; z-index: 5; transition: opacity 0.9s ease, transform 0.9s ease; }
+.layer.gone { opacity: 0; pointer-events: none; }
+.cta { padding: 13px 26px; border-radius: 999px; border: 1px solid rgba(232,163,92,0.55); background: rgba(232,163,92,0.14);
+  color: #fff4e3; font: 500 15px var(--sans); cursor: pointer; transition: background-color 0.15s; }
+.cta:hover { background: rgba(232,163,92,0.26); }
+.eyebrow { font: 500 12px var(--mono); letter-spacing: 0.24em; color: var(--accent); }
+
+/* A — the title over the live map */
+#a { display: grid; place-items: center; text-align: center;
+  background: radial-gradient(ellipse at 50% 46%, rgba(6,8,11,0.3), rgba(3,5,10,0.85) 75%);
+  backdrop-filter: blur(7px) brightness(0.7); -webkit-backdrop-filter: blur(7px) brightness(0.7); }
+#a.gone { transform: scale(1.04); }
+#a h1 { margin: 18px 0 10px; font: 500 96px var(--serif); letter-spacing: 0.01em; color: #F4F1EA; }
+#a .sub { font: 300 italic 28px var(--serif); color: #c9cfd8; }
+#a .cta { margin-top: 44px; }
+#a .facts { margin-top: 22px; font: 12px var(--mono); letter-spacing: 0.12em; color: var(--ink-3); }
+
+/* B — the opening film, then the map */
+#b { background: #000; }
+#b .frame { position: absolute; inset: 0; background: center / cover no-repeat; opacity: 0; transition: opacity 0.9s ease; }
+#b .frame.on { opacity: 1; }
+#b .skip { position: absolute; right: 28px; bottom: 28px; z-index: 2; padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.22); background: rgba(16,19,24,0.5); color: var(--ink); font: 500 13px var(--sans);
+  backdrop-filter: blur(12px); }
+#b .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 0; z-index: 2; }
+
+/* C — a cover page beside the map */
+#c { background: linear-gradient(90deg, rgba(3,5,10,0.95) 0%, rgba(3,5,10,0.88) 44%, rgba(3,5,10,0.3) 72%, rgba(3,5,10,0.08) 100%); }
+#c.gone { transform: translateX(-60px); }
+#c .brand { position: absolute; left: 64px; top: 52px; font: 600 17px var(--sans); letter-spacing: 0.18em; color: #fff; }
+#c .col { position: absolute; left: 64px; top: 210px; width: 560px; }
+#c h1 { margin: 16px 0 18px; font: 500 78px/1 var(--serif); color: #F4F1EA; }
+#c p { margin: 0; font: 300 24px/1.5 var(--serif); color: #c9cfd8; }
+#c .stats { display: flex; gap: 40px; margin: 34px 0 40px; }
+#c .stats b { display: block; font: 300 42px var(--serif); color: #F4F1EA; }
+#c .stats span { font: 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+#c .film { margin-left: 18px; font: 15px var(--sans); color: var(--ink-2); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+#c .logos { position: absolute; left: 64px; bottom: 40px; font: 12px var(--mono); letter-spacing: 0.12em; color: var(--ink-3); }
+
+/* the mockup's own panel (amber, dashed: not part of the design) */
+.mock { position: fixed; z-index: 50; right: 16px; top: 16px; width: 280px; padding: 14px 16px 16px; box-sizing: border-box; border-radius: 16px;
+  background: rgba(28, 22, 14, 0.95); border: 1px dashed rgba(232,163,92,0.6); font-size: 12.5px; color: #f1e6d6; box-shadow: 0 24px 60px -18px rgba(0,0,0,0.8); }
+.mock.closed > :not(.mock-head) { display: none; }
+.mock-head { display: flex; justify-content: space-between; cursor: pointer; }
+.mock-head b { font: 500 10.5px var(--mono); letter-spacing: 0.18em; color: var(--accent); }
+.mock-head span { font-size: 11px; color: #b9a68a; }
+.mock button.opt { display: block; width: 100%; margin-top: 6px; padding: 9px 10px; border: 0; border-radius: 10px; background: rgba(255,255,255,0.04);
+  color: #d8c7ad; font: inherit; text-align: left; cursor: pointer; line-height: 1.4; }
+.mock button.opt b { font: 500 11px var(--mono); color: var(--accent); margin-right: 6px; }
+.mock button.opt small { display: block; color: #9c8b72; font-size: 11px; }
+.mock button.opt.on { background: rgba(232,163,92,0.22); color: #fff4e3; }
+.mock .replay { margin-top: 12px; width: 100%; padding: 8px; border-radius: 9px; border: 1px solid rgba(232,163,92,0.4); background: none; color: #f1e6d6; cursor: pointer; font: inherit; }
+.mock p { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #9c8b72; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <iframe id="app" src="/" title="Seoul Data Atlas"></iframe>
+
+  <div class="layer gone" id="a">
+    <div>
+      <div class="eyebrow">UHUS · URBAN HEAT / URBAN SALES · 2024</div>
+      <h1>Seoul Data Atlas</h1>
+      <div class="sub">One view of the city's data</div>
+      <button class="cta" data-enter>Explore the map &nbsp;→</button>
+      <div class="facts">422 NEIGHBOURHOODS · 25 DISTRICTS · 366 DAYS</div>
+    </div>
+  </div>
+
+  <div class="layer gone" id="b">
+    <div class="frame" style="background-image:url(img/opening/00_golden.jpg)"></div>
+    <div class="frame" style="background-image:url(img/opening/01_night_hud.jpg)"></div>
+    <div class="frame" style="background-image:url(img/opening/02_scattered_wall.jpg)"></div>
+    <div class="frame" style="background-image:url(img/opening/03_question.jpg)"></div>
+    <div class="frame" style="background-image:url(img/opening/04_one_view_linked.jpg)"></div>
+    <div class="frame" style="background-image:url(img/opening/05_title.jpg)"></div>
+    <button class="skip" data-enter>Skip intro &nbsp;›</button>
+    <div class="bar" id="bar"></div>
+  </div>
+
+  <div class="layer gone" id="c">
+    <div class="brand">✧&nbsp; SEOUL DATA ATLAS</div>
+    <div class="col">
+      <div class="eyebrow">RESEARCH PROTOTYPE · 2024</div>
+      <h1>How heat reshapes<br>Seoul's streets</h1>
+      <p>Weather, retail sales and urban form for all 422 neighbourhoods — on one map, with the charts beside it.</p>
+      <div class="stats"><div><b>422</b><span>neighbourhoods</span></div><div><b>25</b><span>districts</span></div><div><b>366</b><span>days</span></div></div>
+      <button class="cta" data-enter>Explore the map &nbsp;→</button><span class="film" id="c-film">Watch the opening (20 s)</span>
+    </div>
+    <div class="logos">KAIST CAUS · STIL · KUAI · GS E&amp;C · SEOUL AI FOUNDATION</div>
+  </div>
+</div>
+
+<aside class="mock" id="mock">
+  <div class="mock-head" onclick="this.parentElement.classList.toggle('closed')"><b>OPENING PAGE</b><span>접기 / 펴기</span></div>
+  <button class="opt" data-v="a"><b>A</b>지도 위 제목 카드<small>흐린 실제 지도 위에 제목 + "Explore the map". 누르면 바로 지도로</small></button>
+  <button class="opt" data-v="b"><b>B</b>오프닝 영상 → 지도<small>만들어 둔 20초 오프닝(opening-video)을 먼저 재생, Skip 가능. 끝나면 지도로</small></button>
+  <button class="opt" data-v="c"><b>C</b>표지 페이지<small>왼쪽에 소개·숫자·로고, 오른쪽에 지도. 영상은 링크로 선택해서 보기</small></button>
+  <button class="replay" id="replay">↺ 처음부터 다시 보기</button>
+  <p>아직 적용 안 됨. 버튼을 눌러 지도로 넘어가는 모습까지 볼 수 있어요. B의 영상은 실제 영상 대신 장면(키프레임)을 이어 붙여 보여줘요.<br>공통: 한 번 보고 나면 다음 방문부터는 바로 지도(설정에서 다시 보기 가능)로 할 수 있어요.</p>
+</aside>
+
+<script>
+const stage = document.getElementById('stage');
+const fit = () => { const s = Math.min(innerWidth / 1440, innerHeight / 900); stage.style.transform = `scale(${s})`;
+  stage.style.left = `${(innerWidth - 1440 * s) / 2}px`; stage.style.top = `${(innerHeight - 900 * s) / 2}px`; };
+addEventListener('resize', fit); fit();
+
+let current = 'a', timers = [];
+const layers = {a: document.getElementById('a'), b: document.getElementById('b'), c: document.getElementById('c')};
+function stopFilm() { timers.forEach(clearTimeout); timers = []; }
+function playFilm() {
+  stopFilm();
+  const frames = [...layers.b.querySelectorAll('.frame')], bar = document.getElementById('bar');
+  // the film's acts (script.json): 0, 0.9, 5.2, 10, 13.4, 18 s; here at 2/3 speed, 13.5 s in all
+  const at = [0, 1.6, 3.8, 6.6, 9, 12], end = 14.5;
+  frames.forEach((f) => f.classList.remove('on'));
+  bar.style.transition = 'none'; bar.style.width = '0';
+  requestAnimationFrame(() => { bar.style.transition = `width ${end}s linear`; bar.style.width = '100%'; });
+  at.forEach((t, i) => timers.push(setTimeout(() => { frames.forEach((f, j) => f.classList.toggle('on', j === i)); }, t * 1000)));
+  timers.push(setTimeout(enter, end * 1000));
+}
+function show(v) {
+  current = v; stopFilm();
+  Object.entries(layers).forEach(([k, el]) => el.classList.toggle('gone', k !== v));
+  document.querySelectorAll('.mock .opt').forEach((b) => b.classList.toggle('on', b.dataset.v === v));
+  if (v === 'b') playFilm();
+}
+function enter() { stopFilm(); layers[current].classList.add('gone'); }
+document.querySelectorAll('[data-enter]').forEach((b) => b.addEventListener('click', enter));
+document.querySelectorAll('.mock .opt').forEach((b) => b.addEventListener('click', () => show(b.dataset.v)));
+document.getElementById('replay').addEventListener('click', () => show(current));
+document.getElementById('c-film').addEventListener('click', () => show('b'));
+show('a');
+</script>
+</body>
+</html>

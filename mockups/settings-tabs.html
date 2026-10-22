@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Settings Tabs Mockup</title>
+<!-- Choice mockup, nothing applied: the Settings panel in two tabs instead of four — how the
+     map looks (Map + Effects + kepler's layer settings) and using it (Interaction + Export) —
+     with a few names for the pair. Served by the dev server at /mockups/settings-tabs.html. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --ink: #eef2f7; --ink-2: #a9b2bf; --ink-3: #6f7886; --line: rgba(255,255,255,0.08); --accent: #e8a35c; }
+body { margin: 0; background: #0b0d10; color: var(--ink); font-family: Manrope, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1000px; margin: 0 auto; padding: 36px 24px 60px; }
+h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+.lede { margin: 0 0 26px; color: var(--ink-2); font-size: 14px; line-height: 1.55; }
+.wrap { display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-start; }
+
+/* the mockup's own picker: amber and dashed, not part of the UI */
+.mock { width: 300px; padding: 14px 16px 16px; box-sizing: border-box; border-radius: 16px; background: rgba(28, 22, 14, 0.94);
+  border: 1px dashed rgba(232,163,92,0.6); font-size: 12.5px; color: #f1e6d6; }
+.mock b.h { display: block; margin-bottom: 10px; font: 500 10.5px 'IBM Plex Mono', monospace; letter-spacing: 0.18em; color: var(--accent); }
+.mock button { display: flex; width: 100%; align-items: baseline; gap: 10px; margin-bottom: 4px; padding: 8px 10px; border: 0; border-radius: 9px;
+  background: none; color: #b9a68a; font: inherit; text-align: left; cursor: pointer; }
+.mock button i { font: 500 10px 'IBM Plex Mono', monospace; font-style: normal; color: inherit; }
+.mock button.on { background: rgba(232,163,92,0.2); color: #fff4e3; }
+.mock p { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #9c8b72; }
+
+/* the Settings panel, as in the app */
+.panel { width: 300px; box-sizing: border-box; padding: 6px 14px 12px; border-radius: 18px; background: rgba(16,19,24,0.86);
+  border: 1px solid var(--line); box-shadow: 0 24px 60px -18px rgba(0,0,0,0.7); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; margin: 8px 0 4px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.03); }
+.tabs button { padding: 6px 0; border: 0; border-radius: 999px; background: none; font: inherit; font-size: 12px; color: var(--ink-2); cursor: pointer; }
+.tabs button.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+section { padding: 10px 0; border-bottom: 1px solid var(--line); }
+section:last-child { border-bottom: 0; }
+h3 { margin: 0 0 8px; font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.maps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.map, .look { display: flex; flex-direction: column; gap: 5px; font-size: 11.5px; color: var(--ink-3); }
+.map svg, .look img { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 9px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box; object-fit: cover; }
+.map.on, .look.on { color: var(--ink); }
+.map.on svg, .look.on img { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.look small { display: block; font-size: 10.5px; color: var(--ink-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.chips span { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: 12px; color: var(--ink-3); }
+.chips span.on { color: var(--ink); background: rgba(255,255,255,0.12); border-color: transparent; }
+.sw { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.sw span { flex: 1; display: flex; flex-direction: column; }
+.sw b { font-weight: 500; font-size: 13px; }
+.sw small { font-size: 11px; color: var(--ink-3); }
+.sw i { flex: none; width: 30px; height: 18px; border-radius: 999px; background: rgba(232,163,92,0.45); position: relative; }
+.sw i::after { content: ''; position: absolute; left: 14px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); }
+.sw.off i { background: rgba(255,255,255,0.12); }
+.sw.off i::after { left: 2px; background: var(--ink-2); }
+.act { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 13px; }
+.act svg { width: 15px; height: 15px; fill: none; stroke: var(--ink-3); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.act small { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.act.kepler { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <h1>설정 메뉴 2개로 나누기 — 목업</h1>
+  <p class="lede">아직 적용하지 않았어요. 4개 탭(Map · Effects · Interaction · Export)을 두 개로 합친 모습이에요.<br>
+    첫 탭 = 지도가 어떻게 보이는지(베이스맵, 지도 레이어, 3D 모습, 버블, kepler 레이어 설정) · 둘째 탭 = 쓰는 기능(마우스 동작, 내보내기).<br>
+    왼쪽에서 탭 이름을 골라 보고, 패널의 탭을 눌러 내용을 확인해 주세요.</p>
+  <div class="wrap">
+    <aside class="mock">
+      <b class="h">탭 이름 고르기</b>
+      <button data-names="Map|Tools" class="on"><i>A</i>Map · Tools</button>
+      <button data-names="Layers|Tools"><i>B</i>Layers · Tools</button>
+      <button data-names="Display|Data & tools"><i>C</i>Display · Data &amp; tools</button>
+      <button data-names="Look|Use"><i>D</i>Look · Use</button>
+      <p>"Layer settings (kepler.gl)" 버튼은 첫 탭 맨 아래로 옮겼어요 — 레이어 모양을 바꾸는 곳이라서요.</p>
+    </aside>
+
+    <div class="panel">
+      <nav class="tabs"><button class="on" data-tab="1">Map</button><button data-tab="2">Tools</button></nav>
+      <div data-pane="1">
+        <section>
+          <h3>Base map</h3>
+          <div class="maps">
+            <div class="map on"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#121417"/><path d="M6 4h14v10H6zM40 26h14v10H40z" fill="#181c1a"/><path d="M0 27C12 21 20 31 32 25S50 17 60 21" fill="none" stroke="#22272f" stroke-width="5"/><path d="M0 12h60M14 0v40M36 0v40M0 34h60" stroke="#2c3036"/><path d="M0 40L48 0" stroke="#3b4047" stroke-width="2"/></svg>Dark</div>
+            <div class="map"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#f3f2ef"/><path d="M6 4h14v10H6zM40 26h14v10H40z" fill="#e6ebe3"/><path d="M0 27C12 21 20 31 32 25S50 17 60 21" fill="none" stroke="#d3dce1" stroke-width="5"/><path d="M0 12h60M14 0v40M36 0v40M0 34h60" stroke="#fff"/><path d="M0 40L48 0" stroke="#e2e2e2" stroke-width="2"/></svg>Light</div>
+            <div class="map"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#f4efe6"/><path d="M6 4h14v10H6zM40 26h14v10H40z" fill="#d6e6c6"/><path d="M0 27C12 21 20 31 32 25S50 17 60 21" fill="none" stroke="#a9cfe0" stroke-width="5"/><path d="M0 12h60M14 0v40M36 0v40M0 34h60" stroke="#fff"/><path d="M0 40L48 0" stroke="#f6cf86" stroke-width="2"/></svg>Streets</div>
+            <div class="map"><svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#0b0d10"/></svg>None</div>
+          </div>
+        </section>
+        <section>
+          <h3>Map layers</h3>
+          <div class="chips"><span>Labels</span><span class="on">Roads</span><span class="on">Buildings</span><span>Borders</span></div>
+          <div class="sw"><span><b>Gu · dong names</b><small>Districts on the whole city, neighbourhoods when zoomed in</small></span><i></i></div>
+          <div class="sw"><span><b>Gu · dong boundaries</b><small>Dashed outlines; neighbourhoods when zoomed in</small></span><i></i></div>
+        </section>
+        <section>
+          <h3>3D look</h3>
+          <div class="looks">
+            <div class="look on"><img src="/src/assets/look-glow.jpg" alt=""><span>Glow<small>Overlaps add up to light</small></span></div>
+            <div class="look"><img src="/src/assets/look-solid.jpg" alt=""><span>Solid<small>Solid colour, midday sun</small></span></div>
+          </div>
+        </section>
+        <section>
+          <h3>Bubbles</h3>
+          <div class="sw"><span><b>Halos</b><small>A faint glow round every bubble</small></span><i></i></div>
+          <div class="act kepler"><svg viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></svg>Layer settings (kepler.gl)</div>
+        </section>
+      </div>
+      <div data-pane="2" hidden>
+        <section>
+          <h3>Map interactions</h3>
+          <div class="sw"><span><b>Hover tooltip</b><small>Values of the place under the cursor</small></span><i></i></div>
+          <div class="sw off"><span><b>Brush</b><small>Highlight only what is near the cursor</small></span><i></i></div>
+          <div class="sw off"><span><b>Coordinates</b><small>Show the latitude and longitude under the cursor</small></span><i></i></div>
+        </section>
+        <section>
+          <h3>Export</h3>
+          <div class="act"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>Map image <small>PNG</small></div>
+          <div class="act"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>Data <small>CSV</small></div>
+          <div class="act"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M10 13l-2 2 2 2M14 17l2-2-2-2"/></svg>Interactive map <small>HTML · JSON</small></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const tabs = [...document.querySelectorAll('.tabs button')];
+tabs.forEach((t) => t.addEventListener('click', () => {
+  tabs.forEach((x) => x.classList.toggle('on', x === t));
+  document.querySelectorAll('[data-pane]').forEach((p) => (p.hidden = p.dataset.pane !== t.dataset.tab));
+}));
+document.querySelectorAll('.mock button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.mock button').forEach((x) => x.classList.toggle('on', x === b));
+  b.dataset.names.split('|').forEach((n, i) => (tabs[i].textContent = n));
+}));
+</script>
+</body>
+</html>
