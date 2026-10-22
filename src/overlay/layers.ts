@@ -1,10 +1,10 @@
 import {addLayer, interactionConfigChange, layerConfigChange, layerVisConfigChange, layerVisualChannelConfigChange,
   removeDataset, reorderLayer, toggleLayerForMap, toggleSidePanel, toggleSplitMap} from '@kepler.gl/actions';
-import {VAR_BY_KEY, columnConfigFor, columnIdOf, isTemporal, layerConfigFor, layerIdOf, varOfLayerId,
+import {VAR_BY_KEY, cellConfigFor, cellIdOf, columnConfigFor, columnIdOf, isTemporal, layerConfigFor, layerIdOf, varOfLayerId,
   type Variable} from '../data/catalog';
 import type {UhusData} from '../data/uhus';
 import {OUTLINE_LAYER_ID} from './outline';
-import {PAIR_FIELD, addPair, columnPairIdOf, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
+import {PAIR_FIELD, addPair, cellMixedIdOf, cellPairConfig, cellPairIdOf, columnPairIdOf, dailyRaisedCellsConfig, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
   pairVisConfig} from './pair';
 
 // The selection is what the map is about: at most two variables, in the order they were
@@ -52,29 +52,42 @@ export function layersOnMap(visState: any): OnMap[] {
 // How a selection is drawn. Any two variables are compared: linked, on one map —
 //   2D: the bivariate grid on the places' areas, for every pair (two static ones on the
 //       pair's own dataset; any pair with a daily variable recoloured day by day, pair.ts);
-//   3D: two static ones raise the areas (colour A, height B); two daily ones are bubbles
-//       (colour A, size B); a static and a daily one raise the areas by the static one,
-//       coloured by the daily one (pair.ts);
+//   3D: two static ones raise the areas (colour A, height B); a static and a daily one
+//       raise them by the static one, coloured by the daily one (pair.ts); two daily ones
+//       are bubbles (colour A, size B). Seen from afar, the areas lie down as a flat grid of
+//       small H3 cells (uhus.ts cellsOf) in the 2D colours — see cellView;
 // unlinked, side by side in kepler's split map.
 export type Plan = {layers: string[]; pairable: boolean; areaPair?: [Variable, Variable];
-  dailyPair?: [Variable, Variable]; split?: [string, string]};
+  dailyPair?: [Variable, Variable]; cellPair?: [Variable, Variable]; split?: [string, string]};
 
-// In 3D daily variables are bubbles (c:key, and bc:A:B for a pair); areas raise their own
-// polygons.
+// In 3D a daily variable alone is bubbles (c:key); pairs with one are bc:A:B. Static areas
+// rise as polygons up close (v:, bi:, bc:) and as cells from afar (h:key, hb:A:B, hc:D:S).
+
+// 3D from afar: the areas drawn as a flat grid of H3 cells on the ground instead of raised
+// polygons — the look of a fine-grained tileset seen from a distance. Overlay sets it from the zoom (with
+// some slack, so it does not flicker at the threshold), during its render, so every
+// planFor in the same render agrees.
+let cellView = false;
+export const setCellView = (on: boolean) => { cellView = on; };
 export function planFor(selection: string[], linked: boolean, grain: Grain, is3d = false): Plan {
   const vars = selection.map((k) => VAR_BY_KEY[k]).filter(Boolean);
   const [a, b] = vars;
   const two = vars.length === 2;
   const sameKind = two && isTemporal(a) === isTemporal(b);
   const pairable = two && (!sameKind || dataIdFor(a, grain) === dataIdFor(b, grain));
-  const single = (x: Variable) => (is3d && isTemporal(x) ? columnIdOf(x.key) : layerIdOf(x.key));
+  const cells = is3d && cellView;
+  const single = (x: Variable) => (!is3d ? layerIdOf(x.key) : isTemporal(x) ? columnIdOf(x.key)
+    : cells ? cellIdOf(x.key) : layerIdOf(x.key));
   if (pairable && linked) {
-    if (!isTemporal(a) && !isTemporal(b)) return {layers: [pairIdOf(a.key, b.key)], pairable, areaPair: [a, b]};
+    if (!isTemporal(a) && !isTemporal(b)) {
+      return cells ? {layers: [cellPairIdOf(a.key, b.key)], pairable, cellPair: [a, b]}
+        : {layers: [pairIdOf(a.key, b.key)], pairable, areaPair: [a, b]};
+    }
     if (!is3d) return {layers: [pairIdOf(a.key, b.key)], pairable, dailyPair: [a, b]};
     if (sameKind) return {layers: [columnPairIdOf(a.key, b.key)], pairable, dailyPair: [a, b]};
     // the daily one first, whatever the selection order: it is the colour, the static one the height
     const [d, s] = isTemporal(a) ? [a, b] : [b, a];
-    return {layers: [columnPairIdOf(d.key, s.key)], pairable, dailyPair: [d, s]};
+    return {layers: [cells ? cellMixedIdOf(d.key, s.key) : columnPairIdOf(d.key, s.key)], pairable, dailyPair: [d, s]};
   }
   const layers = vars.map(single);
   return {layers, pairable, split: two ? [layers[0], layers[1]] : undefined};
@@ -83,13 +96,16 @@ export function planFor(selection: string[], linked: boolean, grain: Grain, is3d
 // The same variable's layer in the other mode: points ↔ columns. A pair's twin may hold
 // its two keys the other way round (the raised static × daily pair puts the daily first),
 // so both orders are given.
+// (a variable: v: / c: / h:; a pair: bi: / bc: / hb: / hc:, its keys either way round)
 const twinsOf = (id: string): string[] => {
-  if (id.startsWith('v:')) return [`c:${id.slice(2)}`];
-  if (id.startsWith('c:')) return [`v:${id.slice(2)}`];
+  const prefix = id.slice(0, id.indexOf(':') + 1);
+  if (['v:', 'c:', 'h:'].includes(prefix)) {
+    return ['v:', 'c:', 'h:'].filter((p) => p !== prefix).map((p) => `${p}${id.slice(2)}`);
+  }
   const keys = pairKeysOf(id);
   if (!keys) return [];
-  const other = id.startsWith('bi:') ? 'bc:' : 'bi:';
-  return [`${other}${keys[0]}:${keys[1]}`, `${other}${keys[1]}:${keys[0]}`];
+  return ['bi:', 'bc:', 'hb:', 'hc:'].filter((p) => p !== prefix)
+    .flatMap((o) => [`${o}${keys[0]}:${keys[1]}`, `${o}${keys[1]}:${keys[0]}`]);
 };
 
 // The selection as cards: each variable with the kepler layer that draws it (missing for
@@ -98,7 +114,7 @@ export function selectionEntries(visState: any, selection: string[], linked: boo
   is3d = false): (OnMap & {layer: any})[] {
   const plan = planFor(selection, linked, grain, is3d);
   const find = (id: string) => (visState?.layers || []).find((l: any) => l.id === id);
-  const paired = !!(plan.areaPair || plan.dailyPair);
+  const paired = !!(plan.areaPair || plan.dailyPair || plan.cellPair);
   const keys = selection.filter((k) => VAR_BY_KEY[k]);
   // a pair's parts follow its layer id, which need not be the selection order
   const first = paired ? pairKeysOf(plan.layers[0])?.[0] : null;
@@ -107,7 +123,7 @@ export function selectionEntries(visState: any, selection: string[], linked: boo
     : {layer: find(plan.layers[i]), variable: VAR_BY_KEY[k]});
 }
 
-export const isOurs = (id: string) => ['v:', 'c:', 'bi:', 'bc:'].some((p) => id.startsWith(p));
+export const isOurs = (id: string) => ['v:', 'c:', 'h:', 'bi:', 'bc:', 'hb:', 'hc:'].some((p) => id.startsWith(p));
 
 // Draws the selection: the planned layers on, every other layer of ours off and out of
 // kepler's layer list. Runs only when the selection, the link, the grain or the data
@@ -159,20 +175,27 @@ export function drawSelection(dispatch: Dispatch, get: GetVisState,
     const existing = find(vs, id);
     const x = varOfLayerId(id);
     if (x) {
-      const dataId = dataIdFor(x, grain);
+      const dataId = id.startsWith('h:') ? `${grain}_cells` : dataIdFor(x, grain);
       if (!vs.datasets[dataId]) continue;
-      const cfg: any = id.startsWith('c:') ? columnConfigFor(x, dataId)
+      const cfg: any = id.startsWith('c:') ? columnConfigFor(x, dataId) : id.startsWith('h:') ? cellConfigFor(x, dataId)
         : {...layerConfigFor(x), config: {...layerConfigFor(x).config, dataId}};
       if (!existing) dispatch(addLayer(cfg, dataId));
       else if (existing.config.dataId !== dataId) dispatch(layerConfigChange(existing, {dataId}));
+    } else if (id.startsWith('hb:')) {
+      const [a, b] = pairKeysOf(id)!.map((k) => VAR_BY_KEY[k]);
+      const dataId = `${grain}_cells`;
+      if (!vs.datasets[dataId]) continue;
+      if (!existing) dispatch(addLayer(cellPairConfig(a, b, dataId) as any, dataId));
+      else if (existing.config.dataId !== dataId) dispatch(layerConfigChange(existing, {dataId}));
     } else if (plan.dailyPair) {
       const [a, b] = plan.dailyPair;
-      // bubbles stand on the daily rows; the 2D grid and the raised static × daily pair
-      // on the places' areas (see pair.ts)
+      // bubbles stand on the daily rows, the raised static × daily pair on the places'
+      // cells, the 2D grid on their areas (see pair.ts)
       const bubbles = id.startsWith('bc:') && isTemporal(b);
-      const dataId = bubbles ? dataIdFor(a, grain) : grain;
+      const dataId = bubbles ? dataIdFor(a, grain) : id.startsWith('hc:') ? `${grain}_cells` : grain;
       if (!vs.datasets[dataId]) continue;
       const cfg: any = bubbles ? dailyColumnPairConfig(a, b, dataId)
+        : id.startsWith('hc:') ? dailyRaisedCellsConfig(a, b, dataId)
         : id.startsWith('bc:') ? dailyRaisedPairConfig(a, b, dataId) : dailyPairConfig(a, b, dataId);
       if (!existing) dispatch(addLayer(cfg, dataId));
       else if (existing.config.dataId !== dataId) dispatch(layerConfigChange(existing, {dataId}));
@@ -221,7 +244,8 @@ const pairMode = new Map<string, boolean>();
 // The area pair last asked of kepler and not seen on the map yet (see drawSelection).
 let pendingPair: {layerId: string; dataId: string; at: number} | null = null;
 export function restylePair(dispatch: Dispatch, visState: any, is3d: boolean) {
-  const layer = (visState?.layers || []).find((l: any) => pairKeysOf(l.id) && isPairDataId(l.config.dataId));
+  const layer = (visState?.layers || []).find((l: any) => pairKeysOf(l.id) && isPairDataId(l.config.dataId)
+    && visState.datasets?.[l.config.dataId]);
   const keys = layer && pairKeysOf(layer.id);
   if (!layer || !keys || pairMode.get(layer.id) === is3d) return;
   pairMode.set(layer.id, is3d);
@@ -238,8 +262,10 @@ export function restylePair(dispatch: Dispatch, visState: any, is3d: boolean) {
 export function syncOrder(dispatch: Dispatch, visState: any) {
   const order: string[] = visState?.layerOrder || [];
   const isDaily = (id: string) => isDailyDataId(visState.layers.find((l: any) => l.id === id)?.config.dataId ?? '');
-  // the district's dong outline above everything, then daily layers, then areas
-  const rank = (id: string) => (id === OUTLINE_LAYER_ID ? -1 : isDaily(id) ? 0 : 1);
+  // the district's dong outline above everything, then daily layers (each bubble layer's
+  // halo just behind it), then areas
+  const rank = (id: string) => (id === OUTLINE_LAYER_ID ? -1 : id.startsWith('halo:') ? (isDaily(id) ? 0.5 : 1.5)
+    : isDaily(id) ? 0 : 1);
   const next = order.map((id, i) => ({id, i})).sort((a, b) => rank(a.id) - rank(b.id) || a.i - b.i).map((o) => o.id);
   if (next.some((id, i) => id !== order[i])) dispatch(reorderLayer(next));
 }
@@ -309,7 +335,8 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
   const next: Record<string, any[]> = {};
   const pairIds = on.map((x) => x.layer.config.dataId).filter(isPairDataId);
   const current = tooltip.config?.fieldsToShow || {};
-  const ids = ['dong', 'gu', 'gu_daily', ...(visState.datasets?.dong_daily ? ['dong_daily'] : []), ...new Set(pairIds)];
+  const ids = ['dong', 'gu', 'gu_daily', ...(visState.datasets?.dong_daily ? ['dong_daily'] : []), ...new Set(pairIds),
+    ...['dong_cells', 'gu_cells'].filter((d) => visState.datasets?.[d])];
   for (const id of ids) {
     // a pair's tooltip also names its class, e.g. "RHSI high · Elderly low"
     const required = [...names(id), ...varsIn(id), ...(isPairDataId(id) ? [f(PAIR_FIELD)] : [])];

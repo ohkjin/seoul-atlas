@@ -1,4 +1,5 @@
-import {addFilter, layerConfigChange, removeFilter, setFilter, setMapControlVisibility, toggleSidePanel} from '@kepler.gl/actions';
+import {layerConfigChange, removeFilter, setMapControlVisibility, toggleSidePanel} from '@kepler.gl/actions';
+import {addSyncedFilter, isOurFilterId} from './ourFilters';
 import {hideLayer, isOurs} from './layers';
 import {OUTLINE_LAYER_ID} from './outline';
 
@@ -22,19 +23,6 @@ export const PLACE_FILTER = {gu: 'place:gu', dong: 'place:dong'};
 type ParkedFilter = {id: string; dataId: string[]; name: string[]; value: unknown};
 let parked: {layers: string[]; filters: ParkedFilter[]} = {layers: [], filters: []};
 
-// A filter rebuilt one dataset at a time, its field set in the same action: kepler
-// filtered in between with no field name and logged an error (as with the time filter,
-// Overlay.tsx).
-function addSyncedFilter(dispatch: Dispatch, get: GetVisState, id: string, dataIds: string[], fields: string[], value?: unknown) {
-  const ids = dataIds.filter((d) => get().datasets[d]);
-  if (!ids.length) return;
-  dispatch(addFilter(ids[0], id));
-  const idx = get().filters.findIndex((f: any) => f.id === id);
-  if (idx < 0) return;
-  ids.forEach((d, i) => dispatch(setFilter(idx, ['dataId', 'name'] as any, [d, fields[dataIds.indexOf(d)]] as any, i)));
-  if (value !== undefined) dispatch(setFilter(idx, 'value', value));
-}
-
 export function enterSandbox(dispatch: Dispatch, get: GetVisState) {
   for (const id of CONTROLS) dispatch(setMapControlVisibility(id as any, true));
   const vs = get();
@@ -52,10 +40,10 @@ export function enterSandbox(dispatch: Dispatch, get: GetVisState) {
 export function leaveSandbox(dispatch: Dispatch, get: GetVisState) {
   const vs = get();
   // what the user made here: layers that are not the atlas's, filters other than time
-  const mine = vs.layers.filter((l: any) => !isOurs(l.id) && l.id !== OUTLINE_LAYER_ID && l.config.isVisible);
+  const mine = vs.layers.filter((l: any) => !isOurs(l.id) && l.id !== OUTLINE_LAYER_ID && !l.id.startsWith('halo:') && l.config.isVisible);
   parked.layers = mine.map((l: any) => l.id);
   mine.forEach((l: any) => hideLayer(dispatch, l));
-  const theirs = get().filters.map((f: any, i: number) => ({f, i})).filter(({f}: any) => f.id !== 'time');
+  const theirs = get().filters.map((f: any, i: number) => ({f, i})).filter(({f}: any) => f.id !== 'time' && !isOurFilterId(f.id));
   parked.filters = theirs.map(({f}: any) => ({id: f.id, dataId: [...f.dataId], name: [...f.name], value: f.value}));
   // from the last, so the indices of the rest hold
   for (const {i} of [...theirs].reverse()) dispatch(removeFilter(i));

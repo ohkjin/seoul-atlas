@@ -1,30 +1,34 @@
-import {Fragment} from 'react';
+import {Fragment, useLayoutEffect, useRef, useState} from 'react';
 import {useDispatch} from 'react-redux';
-import {Link2, Settings, Unlink2} from 'lucide-react';
+import {Filter, Link2, Settings, Unlink2} from 'lucide-react';
 import {THEMES, isTemporal} from '../data/catalog';
 import type {Place, UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
 import {useKepler} from './useKepler';
-import {extentOf, fmt, focusValue} from './focusValues';
+import {extentOf, fmt, focusValue, histogramOf} from './focusValues';
 import {dataIdFor, openMapSettings, selectionEntries, type Grain} from './layers';
 import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from './pair';
 import InfoTip from './InfoTip';
+import PlaceSentence from './PlaceSentence';
+import RangeFilter from './RangeFilter';
+import {placeSeries} from './scatter';
+import type {Ranges} from './ourFilters';
 
 const THEME_LABEL = Object.fromEntries(THEMES.map((t) => [t.key, t.label]));
 const DAY = 86400000;
 
 type Props = {data: UhusData; focus: Focus; onSeoul: () => void; onGu: (g: Place) => void; onDong: (d: Place) => void;
-  grain: Grain; onGrain: (g: Grain) => void; selection: string[]; linked: boolean; pairable: boolean; onLink: () => void};
+  grain: Grain; onGrain: (g: Grain) => void; selection: string[]; linked: boolean; pairable: boolean; onLink: () => void;
+  ranges: Ranges; onRange: (key: string, range: [number, number] | null) => void};
 
-export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, onGrain, selection, linked, pairable, onLink}: Props) {
+export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, onGrain, selection, linked, pairable, onLink, ranges, onRange}: Props) {
   const dispatch = useDispatch();
   const kepler = useKepler();
   const visState = kepler?.visState;
 
   const place = focus.level === 'seoul' ? 'Seoul' : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
+  const placeRef = useFitWidth(place);
   const crumbs = focus.level === 'seoul' ? [] : focus.level === 'gu' ? ['SEOUL'] : ['SEOUL', focus.gu.name.toUpperCase()];
-  const guCode = focus.level === 'seoul' ? '' : focus.gu.code;
-  const dongsInGu = guCode ? data.dongs.filter((d) => d.guCode === guCode) : [];
   // a pair layer is built a moment after linking; its cards appear once it is there
   const onMap = selectionEntries(visState, selection, linked, grain, !!kepler?.mapState?.dragRotate).filter((e) => e.layer);
   const splitMaps: any[] = visState?.splitMaps || [];
@@ -33,47 +37,36 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
   const time = visState?.filters?.find((f: any) => f.id === 'time');
   const day = time?.value ? Math.ceil(time.value[0] / DAY) * DAY : null;
 
+  // The atlas's own filter: a value range on each variable, opened from the card. How many
+  // places pass both, at this grain (and, for a daily variable, on the playing day).
+  const [filterOpen, setFilterOpen] = useState<Record<string, boolean>>({});
+  const anyFilter = Object.keys(ranges).length > 0 || Object.values(filterOpen).some(Boolean);
+  const passing = anyFilter
+    ? placeSeries(visState?.datasets, onMap.map((e) => e.variable).filter((x, i, a) => a.findIndex((y) => y.key === x.key) === i),
+      grain, visState?.filters || [])[0]?.size ?? null
+    : null;
+  const places = grain === 'dong' ? data.dongs.length : data.gus.length;
+
   return (
     <section className="focus">
-      <div className="crumbs-row">
-        <div className="crumbs">
-          {crumbs.length ? crumbs.map((c, i) => (
-            <button key={c} className="crumb" onClick={() => (i === 0 ? onSeoul() : focus.level === 'dong' && onGu(focus.gu))}>{c}</button>
-          )) : <span className="crumb muted">SEOUL METROPOLITAN CITY</span>}
-        </div>
-        <div className="grain" role="group" aria-label="Map detail" title="Map detail — draw the map per district or per neighbourhood">
-          {(['gu', 'dong'] as Grain[]).map((g) => (
-            <button key={g} className={g === grain ? 'on' : ''} aria-pressed={g === grain} onClick={() => onGrain(g)}>
-              {g === 'gu' ? 'Gu' : 'Dong'}
-            </button>
-          ))}
-        </div>
+      <div className="crumbs">
+        {crumbs.length ? crumbs.map((c, i) => (
+          <button key={c} className="crumb" onClick={() => (i === 0 ? onSeoul() : focus.level === 'dong' && onGu(focus.gu))}>{c}</button>
+        )) : <span className="crumb muted">SEOUL METROPOLITAN CITY</span>}
       </div>
-      <h1 className="place">{place}</h1>
-
-      <div className="pickers">
-        <select value={guCode} onChange={(e) => {
-          const g = data.gus.find((x) => x.code === e.target.value);
-          if (g) onGu(g); else onSeoul();
-        }}>
-          <option value="">All gu</option>
-          {data.gus.map((g) => <option key={g.code} value={g.code}>{g.name}</option>)}
-        </select>
-        <select value={focus.level === 'dong' ? focus.dong.code : ''} disabled={!guCode} onChange={(e) => {
-          const d = dongsInGu.find((x) => x.code === e.target.value);
-          if (d) onDong(d); else if (focus.level !== 'seoul') onGu(focus.gu);
-        }}>
-          <option value="">{guCode ? 'All dong' : 'Pick a gu first'}</option>
-          {dongsInGu.map((d) => <option key={d.code} value={d.code}>{d.name}</option>)}
-        </select>
-      </div>
+      <h1 ref={placeRef} className="place">{place}</h1>
+      <PlaceSentence data={data} focus={focus} grain={grain} onSeoul={onSeoul} onGu={onGu} onDong={onDong} onGrain={onGrain} />
 
       <div className="layer-cards">
         {onMap.map(({layer, variable: x, pairPart}, i) => {
           const dataset = visState.datasets[layer.config.dataId];
           // the daily pair's grid and raised areas sit on the areas; its values live in the daily rows
           const onLayer = dataset?.fields.some((f: any) => f.name === x.key);
-          const source = !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)] : dataset;
+          // the cells hold each place's value many times over: an average over them would weigh
+          // a place by its area, so a card on the cells reads the places themselves
+          const cells = layer.config.dataId.endsWith('_cells');
+          const source = !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)]
+            : cells ? visState.datasets[isTemporal(x) ? dataIdFor(x, grain) : grain] : dataset;
           const value = focusValue(source, x.key, focus, x.how, visState.filters);
           const extent = extentOf(source, x.key);
           const colors: string[] = layer.config.visConfig?.colorRange?.colors || [];
@@ -124,6 +117,11 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
               <div className="lc-row">
                 <span className="lc-name">{x.short}</span>
                 <InfoTip x={x} />
+                <button className={`lc-filter${ranges[x.key] ? ' on' : ''}${filterOpen[x.key] ? ' open' : ''}`}
+                  title={ranges[x.key] ? 'Filtered — click to edit' : 'Filter places by this value'} aria-pressed={!!ranges[x.key]}
+                  onClick={() => setFilterOpen((o) => ({...o, [x.key]: !o[x.key]}))}>
+                  <Filter size={12} strokeWidth={1.9} />
+                </button>
               </div>
               <div className="lc-value">
                 {fmt(value)}
@@ -149,6 +147,10 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                     <span>{fmt(extent[1])}</span>
                   </div>
                 </div>
+              )}
+              {extent && (filterOpen[x.key] || ranges[x.key]) && (
+                <RangeFilter domain={extent} value={ranges[x.key] ?? null} hist={histogramOf(source, x.key, extent)} unit={x.unit}
+                  count={passing != null ? [passing, places] : null} onChange={(r) => onRange(x.key, r)} />
               )}
             </article>
             </Fragment>
@@ -200,4 +202,27 @@ function focusClass(dataset: any, focus: Focus): string | null {
   const dc = dataset.dataContainer;
   for (let r = 0; r < dc.numRows(); r++) if (String(dc.valueAt(r, ci)) === code) return dc.valueAt(r, bi);
   return null;
+}
+
+// The place name on one line at its full display size where it fits; a longer name
+// (Gangnam-gu, Cheongunhyoja-dong) steps down until it does, never below MIN_PX.
+// Measured again once the serif has loaded, as the fallback face runs narrower.
+const MIN_PX = 30;
+function useFitWidth(text: string) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.fontSize = '';
+      el.style.whiteSpace = '';
+      const full = parseFloat(getComputedStyle(el).fontSize);
+      if (el.scrollWidth <= el.clientWidth) return;
+      el.style.fontSize = `${Math.max(MIN_PX, Math.floor(full * el.clientWidth / el.scrollWidth))}px`;
+      if (el.scrollWidth > el.clientWidth) el.style.whiteSpace = 'normal';   // too long even at MIN_PX: wrap
+    };
+    fit();
+    document.fonts?.ready.then(fit);
+  }, [text]);
+  return ref;
 }

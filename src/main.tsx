@@ -1,8 +1,9 @@
+import './kepler/hoverColour';   // first: before the map is drawn (see the file)
 import ReactDOM from 'react-dom/client';
 import {Provider} from 'react-redux';
 import {store} from './store';
 import App from './App';
-import '@fontsource-variable/inter';
+import '@fontsource-variable/manrope';
 import './styles.css';
 
 // Dev-only handles so the browser console can inspect kepler's state and the layout.

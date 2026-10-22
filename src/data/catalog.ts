@@ -96,8 +96,14 @@ export const SALES_GROUP_KEYS = ['sales_fnb', 'sales_retail', 'sales_fashion', '
 export const layerIdOf = (key: string) => `v:${key}`;
 // In 3D a daily variable is drawn as hexagonal columns instead of points: layer c:key.
 export const columnIdOf = (key: string) => `c:${key}`;
+// In 3D a static variable is drawn as a stipple of small H3 columns: layer h:key.
+export const cellIdOf = (key: string) => `h:${key}`;
 export const varOfLayerId = (id: string) =>
-  (id.startsWith('v:') || id.startsWith('c:') ? VAR_BY_KEY[id.slice(2)] : undefined);
+  (id.startsWith('v:') || id.startsWith('c:') || id.startsWith('h:') ? VAR_BY_KEY[id.slice(2)] : undefined);
+
+// The dark line between areas, shared by every area layer (here and pair.ts). Chosen from
+// a side-by-side of 0.5–0.8px (mockups/border-lines.png, option B).
+export const AREA_STROKE = {stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.8, thickness: 0.6};
 
 // One kepler layer (saved-map v1 format) for a variable — the same shape mapConfig uses,
 // so addLayer can parse it with kepler's own config loader. Colours are kepler's defaults.
@@ -118,7 +124,7 @@ export function layerConfigFor(x: Variable, isVisible = true) {
   return {
     id: layerIdOf(x.key), type: 'geojson',
     config: {dataId: 'dong', label: x.short, columns: {geojson: '_geojson'}, isVisible,
-      visConfig: {opacity: 0.75, strokeOpacity: 0.6, thickness: 0.4, stroked: true, filled: true,
+      visConfig: {opacity: 0.75, ...AREA_STROKE, filled: true,
         enable3d: false, elevationScale: 5}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile',
       heightField: {name: x.key, type: 'real'}, heightScale: 'linear'}
@@ -145,6 +151,19 @@ export function columnConfigFor(x: Variable, dataId: string) {
         ...(range ? {colorRange: range} : {})}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile',
       sizeField: {name: x.key, type: 'real'}, sizeScale: heightScaleFor(x)}
+  };
+}
+
+// A static variable in 3D seen from afar (h:key): kepler's H3 layer on the areas' cells
+// (uhus.ts cellsOf), lying flat on the ground — a hex grid in the same quantile colours as
+// the areas (kepler's default ramp), the cells a little apart so it reads as a fine
+// stipple. Up close the raised areas take over (layers.ts cellView).
+export function cellConfigFor(x: Variable, dataId: string) {
+  return {
+    id: cellIdOf(x.key), type: 'hexagonId',
+    config: {dataId, label: x.short, columns: {hex_id: 'h3'}, isVisible: true,
+      visConfig: {opacity: 0.9, coverage: 0.72, enable3d: false}},
+    visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile'}
   };
 }
 

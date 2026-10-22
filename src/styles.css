@@ -4,11 +4,15 @@
   --bar-h: 92px;
   --panel-h: 300px;
   --edge: var(--gap);       /* drawer inset from the screen edge — same as the original bar */
+  --bar-h: 30px;            /* the status bar along the foot of the screen (StatusBar.tsx) */
+  --floor: calc(var(--edge) + var(--bar-h));   /* where the bottom-anchored panels stand: on the status bar */
   --card-h: 92px;           /* drawer theme cards — the original infographic bar height */
   --list-h: min(330px, calc(var(--ui-h) * 0.4));
   --focus-w: 300px;
   --graph-w: 320px;
   --frost-w: 330px;         /* the frosted column behind the Focus text */
+  --rail-w: 72px;           /* the tab rail down the left edge */
+  --inset: calc(var(--gap) + var(--rail-w) + var(--gap));   /* where the map's panels start, right of the rail */
   --ink: #eef2f7;
   --ink-2: #a9b2bf;
   --ink-3: #6f7886;
@@ -23,14 +27,14 @@
   --ui-zoom: 1;
   --ui-w: calc(100vw / var(--ui-zoom));
   --ui-h: calc(100vh / var(--ui-zoom));
-  font-family: Inter, "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
-  /* crisp, fine type: grey-scale antialiasing (lighter strokes on dark), and, where Inter
-     is installed, its single-storey a and contextual alternates. The stack names plain
-     Inter, not the bundled 'Inter Variable': on Windows without Inter it renders in the
-     system UI font, which is the size the panels are tuned for (Inter Variable runs about
-     8% wider and 10% taller at the same px, and everything read as enlarged) */
+  /* the UI face: Manrope, bundled (main.tsx), on every machine — before, the stack named a
+     locally installed Inter and most of the UI fell to the system font while a few parts
+     used the bundled Inter. Hangul has no Manrope glyphs and comes from the system font. */
+  --sans: 'Manrope Variable', Manrope, Pretendard, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--sans);
+  /* crisp, fine type: grey-scale antialiasing (lighter strokes on dark) */
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
-  font-feature-settings: 'cv11', 'calt';
+  font-feature-settings: 'calt';
 }
 @media (min-resolution: 2dppx) { :root { --hair: 0.5px; } }
 
@@ -77,31 +81,102 @@ button { font: inherit; color: inherit; }
 .icon-btn.sm { width: 26px; height: 26px; font-size: 13px; }
 
 /* ---------- top bar ---------- */
-/* One blurred bubble across the whole top row — name, tabs and tools — floating on the
-   map like the reference. Lighter than the panels so the map still shows through. */
-.topbar { position: absolute; top: 8px; left: var(--gap); right: var(--gap); height: var(--topbar-h);
-  display: flex; align-items: center; gap: 20px; padding: 0 6px 0 22px; box-sizing: border-box; }
-.topbar.glass { background: rgba(16, 19, 24, 0.3); border-radius: 999px; border: 0; }
-.topbar { z-index: 30; }
-.blur-always .topbar.glass, .blur-motion .topbar.glass { backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
-.brand { flex: none; white-space: nowrap; font-weight: 500; letter-spacing: 0.04em; text-shadow: 0 1px 10px rgba(0,0,0,0.5); }
-/* the current tab is lit inside the bubble */
-.menu { display: flex; gap: 2px; padding: 4px; border-radius: 999px; }
-.menu-item { background: none; border: 0; padding: 7px 16px; border-radius: 999px; color: var(--ink-2);
-  cursor: pointer; transition: color 0.15s, background-color 0.15s; }
-.menu-item:hover { color: var(--ink); }
-.menu-item.on { color: var(--ink); background: rgba(255,255,255,0.12); }
-.tools { margin-left: auto; display: flex; gap: 6px; }
-.tools .icon-btn { width: 40px; height: 40px; background: rgba(255,255,255,0.06); border-color: transparent; }
-.tools .icon-btn:hover { background: rgba(255,255,255,0.14); }
-.tools .view-3d { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; color: var(--ink-2); }
-.tools .view-3d.on { color: var(--ink); background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.22); }
+/* No bar across the top row: the name, the search and the tools stand on the map by
+   themselves — white, with a soft shadow to read over bright areas. */
+.topbar { position: absolute; z-index: 30; top: 8px; left: var(--gap); right: var(--gap); height: var(--topbar-h);
+  display: flex; align-items: center; gap: 20px; padding: 0 6px 0 22px; box-sizing: border-box; pointer-events: none; }
+.topbar > * { pointer-events: auto; }   /* the empty stretches of the row leave the map draggable */
+/* the earlier atlas's wordmark: a star, then the name in wide-tracked capitals */
+.brand { flex: none; display: flex; align-items: center; gap: 12px; white-space: nowrap;
+  font-size: 17px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.55), 0 0 14px rgba(0,0,0,0.45); }
+.brand-mark { font-size: 20px; letter-spacing: 0; color: #fff; }
+.tools { flex: none; display: flex; gap: 6px; }
+
+/* ---------- search: in the middle of the top bar ---------- */
+/* No bar behind the row, but the search and the tool buttons each keep a faint frosted
+   fill, so they sit back on the map instead of standing out as bare white outlines. */
+.search { position: relative; flex: 1 1 auto; max-width: 560px; margin: 0 auto; height: 40px; display: flex; align-items: center;
+  border-radius: 999px; background: rgba(16, 19, 24, 0.3); border: var(--hair) solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+  transition: background-color 0.15s, border-color 0.15s; }
+.search:hover { background: rgba(16, 19, 24, 0.42); border-color: rgba(255,255,255,0.22); }
+.search:focus-within { background: rgba(16, 19, 24, 0.9); border-color: rgba(232, 163, 92, 0.45); }
+.search-icon { flex: none; margin: 0 10px 0 16px; color: var(--ink-3); }
+.search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none;
+  font: inherit; font-size: 13.5px; color: var(--ink); }
+.search input::placeholder { color: var(--ink-2); }
+.search-icon { color: var(--ink-2); }
+.search-kbd { flex: none; margin-right: 12px; min-width: 18px; padding: 1px 5px; border-radius: 6px; text-align: center;
+  font: 11px 'IBM Plex Mono', monospace; color: var(--ink-3); border: var(--hair) solid rgba(255,255,255,0.14); }
+.search:focus-within .search-kbd { visibility: hidden; }
+.search-results { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 2; margin: 0; padding: 6px;
+  list-style: none; max-height: min(440px, calc(var(--ui-h) - 120px)); overflow-y: auto; border-radius: 16px;
+  background: rgba(16, 19, 24, 0.94); border: var(--hair) solid var(--glass-line); box-shadow: 0 24px 60px -18px rgba(0,0,0,0.75);
+  backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); animation: setIn 0.14s ease-out; }
+.sr-group { padding: 10px 10px 4px; font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
+.sr-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: none; text-align: left; color: var(--ink-2); cursor: pointer; }
+.sr-row svg { flex: none; color: var(--ink-3); }
+.sr-row.on { background: rgba(255,255,255,0.08); color: var(--ink); }
+.sr-row.on svg { color: var(--accent); }
+.sr-name { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sr-sub { flex: none; font-size: 11px; color: var(--ink-3); }
+.sr-empty { padding: 12px 10px; font-size: 13px; color: var(--ink-3); }
+
+/* ---------- Clean mode (Overlay.tsx; mockups/clean-mode.html, C): only the map, the place's
+   name and the status bar; the map's own names, boundaries and tooltip stay ---------- */
+body.clean-mode .topbar, body.clean-mode .rail, body.clean-mode .graph-card, body.clean-mode .time-card,
+body.clean-mode .drawer, body.clean-mode .map-scale, body.clean-mode .settings, body.clean-mode .dash,
+body.clean-mode .side-panel--container, body.clean-mode .focus > :not(.crumbs):not(.place) { display: none !important; }
+body.clean-mode .focus { top: 40px; }
+body.clean-mode .focus-frost { opacity: 0.55; }
+.clean-exit { position: absolute; z-index: 40; top: 14px; right: var(--gap); display: flex; align-items: center; gap: 8px;
+  padding: 7px 8px 7px 12px; border-radius: 999px; border: var(--hair) solid rgba(255,255,255,0.12); cursor: pointer;
+  background: rgba(16, 19, 24, 0.42); backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%);
+  font-size: 12px; font-weight: 500; color: var(--ink); animation: setIn 0.16s ease-out; }
+.clean-exit:hover { background: rgba(16, 19, 24, 0.62); border-color: rgba(255,255,255,0.22); }
+.clean-exit kbd { padding: 1px 6px; border-radius: 6px; border: var(--hair) solid rgba(255,255,255,0.18);
+  font: 10.5px 'IBM Plex Mono', monospace; color: var(--ink-2); }
+
+/* ---------- status bar: a thin line along the foot of the screen (StatusBar.tsx) ---------- */
+body.sandbox { --bar-h: 0px; }
+.status-bar { position: absolute; z-index: 25; left: 0; right: 0; bottom: 0; height: var(--bar-h); box-sizing: border-box;
+  display: flex; align-items: center; padding: 0 calc(var(--gap) + 6px); white-space: nowrap; overflow: hidden;
+  background: rgba(9, 11, 14, 0.72); border-top: var(--hair) solid rgba(255,255,255,0.07);
+  backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  font-size: 11.5px; color: var(--ink-2); }
+.status-bar > div { flex: none; display: flex; align-items: center; gap: 6px; height: 100%; padding: 0 14px;
+  border-left: var(--hair) solid rgba(255,255,255,0.07); }
+.status-bar > div:first-child { padding-left: 0; border-left: 0; }
+.sb-lbl { font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); margin-right: 2px; }
+.sb-num { font-variant-numeric: tabular-nums; }
+.sb-north { color: var(--accent); transition: transform 0.2s; }
+/* the sources sit at the right end and are the part that shortens on a narrow screen */
+.status-bar > .sb-src { flex: 0 1 auto; min-width: 0; margin-left: auto; overflow: hidden; text-overflow: ellipsis; display: block;
+  line-height: var(--bar-h); }
+
+/* ---------- tab rail: the earlier atlas's left menu, an icon over each label ---------- */
+.rail { position: absolute; z-index: 30; left: var(--gap); top: calc(8px + var(--topbar-h) + 12px); bottom: var(--floor);
+  width: var(--rail-w); box-sizing: border-box; padding: 8px 6px; display: flex; flex-direction: column; gap: 4px; }
+.rail-item { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 11px 0 9px; border: 0; border-radius: 12px;
+  background: none; color: var(--ink-3); font-size: 10.5px; letter-spacing: 0.02em; cursor: pointer;
+  transition: color 0.15s, background-color 0.15s; }
+.rail-item:hover { color: var(--ink); background: rgba(255,255,255,0.05); }
+.rail-item.on { color: var(--ink); background: rgba(255,255,255,0.1); }
+.rail-item.on svg { color: var(--accent); }
+.rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: var(--hair) solid var(--glass-line); }
+.tools .icon-btn { width: 40px; height: 40px; background: rgba(16, 19, 24, 0.3); border-color: rgba(255,255,255,0.12); color: var(--ink-2);
+  backdrop-filter: blur(16px) saturate(140%); -webkit-backdrop-filter: blur(16px) saturate(140%); }
+.tools .icon-btn:hover { background: rgba(16, 19, 24, 0.5); border-color: rgba(255,255,255,0.22); color: var(--ink); }
+.tools .view-3d { font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+.tools .view-3d.on { color: #1a1206; background: #fff; border-color: #fff; text-shadow: none; }
 
 /* ---------- frosted column behind the Focus text ----------
    Blurs and darkens only the map under the text. Solid behind the text column, then it
    fades out to the right and toward the bottom, so there is never a visible box edge. */
 .overlay > .focus-frost { pointer-events: none; }
-.focus-frost { position: absolute; left: 0; top: 0; bottom: calc(var(--edge) + var(--card-h) / 2); width: var(--frost-w);
+.focus-frost { position: absolute; left: 0; top: 0; bottom: calc(var(--floor) + var(--card-h) / 2); width: calc(var(--inset) + var(--frost-w) - var(--gap));
   background: rgba(6, 8, 11, 0.18);
   backdrop-filter: blur(8px) brightness(0.62) saturate(0.8);
   -webkit-backdrop-filter: blur(8px) brightness(0.62) saturate(0.8);
@@ -115,30 +190,43 @@ button { font: inherit; color: inherit; }
 .blur-off .focus-frost { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(6, 8, 11, 0.55); }
 
 /* ---------- Focus block (left): magazine type, no box ---------- */
-.focus { position: absolute; left: calc(var(--gap) + 8px); top: calc(var(--topbar-h) + var(--gap) * 3);
+.focus { position: absolute; left: calc(var(--inset) + 6px); top: calc(var(--topbar-h) + var(--gap) * 3);
   width: var(--focus-w);
   /* Runs down to just above the infographic cards; nothing else shares this column. */
-  max-height: calc(100% - var(--topbar-h) - var(--gap) * 3 - var(--edge) - var(--card-h) - 12px);
+  max-height: calc(100% - var(--topbar-h) - var(--gap) * 3 - var(--floor) - var(--card-h) - 12px);
   overflow-y: auto; overflow-x: hidden; text-shadow: 0 1px 12px rgba(0,0,0,0.6); }
-.crumbs-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .crumbs { display: flex; gap: 8px; min-width: 0; font-size: 11px; letter-spacing: 0.14em; color: var(--ink-2); }
-/* Map detail: draw per district or per neighbourhood */
-.grain { flex: none; display: flex; gap: 2px; padding: 2px; border-radius: 999px; border: var(--hair) solid var(--glass-line);
-  background: var(--glass-bg-solid); text-shadow: none; }
-.grain button { background: none; border: 0; border-radius: 999px; padding: 3px 10px; font-size: 11px; color: var(--ink-3);
-  cursor: pointer; }
-.grain button:hover { color: var(--ink); }
-.grain button.on { color: var(--ink); background: rgba(255,255,255,0.12); }
 .crumb { background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: inherit; color: inherit; }
 .crumb + .crumb::before { content: "·"; margin-right: 8px; }
 .crumb.muted { cursor: default; }
-.place { font-size: 42px; font-weight: 500; line-height: 1.05; margin: 6px 0 14px; letter-spacing: -0.025em;
+/* the place in a magazine serif — the display face of the earlier atlas and the Credits page */
+.place { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 78px; font-weight: 500; line-height: 0.95;
+  margin: 6px 0 10px; letter-spacing: -0.01em; color: #F4F1EA; white-space: nowrap;   /* sized to fit in FocusBlock's useFitWidth */
   /* 7 dong names (e.g. Cheongunhyoja-dong) are single words wider than the column;
      without this they pushed the whole block into a sideways scroll. */
   overflow-wrap: anywhere; }
-.pickers { display: flex; gap: 8px; margin-bottom: 10px; }
-.pickers select { flex: 1; min-width: 0; background: var(--glass-bg-solid); color: var(--ink); border: var(--hair) solid var(--glass-line);
-  border-radius: 10px; padding: 7px 8px; }
+/* the line under the place (PlaceSentence): plain UI type, its words open the lists */
+.sentence { margin: 0 0 16px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.sentence-word { padding: 0; border: 0; background: none; font: inherit; color: var(--ink); cursor: pointer; text-shadow: inherit;
+  border-bottom: 1px dashed rgba(232, 163, 92, 0.7); transition: color 0.12s, border-color 0.12s; }
+.sentence-word:hover, .sentence-word.open { color: var(--accent); border-bottom-style: solid; }
+/* the glass list a word opens (drawn into <body>, at the overlay's zoom) */
+.place-pop { position: fixed; z-index: 1000; zoom: var(--ui-zoom); min-width: 220px; max-width: 380px; box-sizing: border-box;
+  max-height: calc(var(--ui-h) - 120px); overflow-y: auto; padding: 6px; border-radius: 16px;
+  background: rgba(20, 23, 29, 0.72); border: var(--hair) solid rgba(255,255,255,0.1);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 24px 60px -18px rgba(0,0,0,0.8);
+  backdrop-filter: blur(24px) saturate(160%); -webkit-backdrop-filter: blur(24px) saturate(160%);
+  color: var(--ink); animation: setIn 0.14s ease-out; }
+.pp-head { padding: 8px 10px 6px; font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
+.pp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; }
+.pp-grid.one { grid-template-columns: 1fr; }
+.pp-grid button { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px;
+  background: none; text-align: left; font-size: 13px; color: var(--ink-2); cursor: pointer; }
+.pp-grid button:hover { background: rgba(255,255,255,0.08); color: var(--ink); }
+.pp-grid button.on { color: var(--ink); background: rgba(232, 163, 92, 0.16); }
+.pp-grid button small { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.pp-grid .pp-all { grid-column: 1 / -1; margin-bottom: 4px; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18px; color: #F4F1EA;
+  border-bottom: var(--hair) solid var(--glass-line); border-radius: 9px 9px 0 0; }
 .layer-cards { display: flex; flex-direction: column; gap: 16px; }
 .lc-meta { display: flex; align-items: center; gap: 8px; min-height: 26px; }
 /* the map's one settings button: larger than the small per-row buttons it replaced */
@@ -164,7 +252,7 @@ button { font: inherit; color: inherit; }
 .info-tip:hover, .info-tip:focus-visible { color: var(--ink); background: rgba(255,255,255,0.08); }
 .info-pop { position: fixed; z-index: 1000; box-sizing: border-box; padding: 12px 14px; border-radius: 14px; pointer-events: none;
   background: rgba(17, 19, 23, 0.94); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 18px 44px -14px rgba(0,0,0,0.7);
-  font-family: 'Inter Variable', Inter, Pretendard, system-ui, sans-serif; font-size: 12px; color: var(--ink-2); }
+  font-family: var(--sans); font-size: 12px; color: var(--ink-2); }
 .info-pop.up { transform: translateY(-100%); }
 .ip-full { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink); }
 .info-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; }
@@ -198,15 +286,39 @@ button { font: inherit; color: inherit; }
 .gc-tick { font-size: 9px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
 
 /* ---------- dashboard window ---------- */
-/* Floats over the map and every card (the drawer included), dragged by its head and
-   resized from the bottom-right corner (native resize). */
-/* tall enough for the summary row and four panels that need no scrolling at 1440×900;
-   on a bigger screen it takes most of it (the charts scale with their panels) */
-.dash { position: absolute; z-index: 8; width: max(min(1080px, calc(var(--ui-w) - 32px)), calc(var(--ui-w) * 0.72));
-  height: max(min(840px, calc(var(--ui-h) - 84px)), calc(var(--ui-h) - 110px));
-  min-width: 560px; min-height: 380px; resize: both; overflow: hidden; display: flex; flex-direction: column;
+/* Floats over the map and every card (the drawer included). Its place and size are set
+   by useWindowFrame (kepler's legend behaviour): on hover the border lights and the grips
+   show — a move handle on the top edge, resize handles on the bottom and right edges —
+   and every edge and corner can be pulled. The panels reflow with its size (container
+   queries below). */
+.dash { position: absolute; z-index: 8; display: flex; flex-direction: column; container-type: size;
   box-sizing: border-box; padding: 14px 16px 16px; background: var(--glass-bg-solid);
+  transition: border-color 0.2s ease-in-out;
   box-shadow: 0 30px 80px -20px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.05); }
+.dash:hover, .dash.held { border-color: rgba(232, 163, 92, 0.45); }
+.dash.held { user-select: none; }
+.dash.held * { pointer-events: none; }   /* the charts under the pointer stay still while it is pulled */
+.dash-tools { flex: none; display: flex; gap: 6px; }
+/* kepler's grips: small pills that appear on hover, centred on their edge */
+.dash-grip { position: absolute; z-index: 3; display: grid; place-items: center; border-radius: 4px;
+  color: var(--ink); background: var(--accent); opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; }
+.dash:hover .dash-grip, .dash.held .dash-grip { opacity: 1; pointer-events: auto; }
+.dash-grip.move { top: 0; left: 50%; width: 48px; height: 16px; transform: translate(-50%, -50%); cursor: move; color: #1a1206; }
+.dash-grip.s { bottom: 0; left: 50%; width: 48px; height: 16px; transform: translate(-50%, 50%); cursor: ns-resize;
+  color: var(--ink); background: rgba(60, 66, 76, 0.95); }
+.dash-grip.e { right: 0; top: 50%; width: 16px; height: 48px; transform: translate(50%, -50%); cursor: ew-resize;
+  color: var(--ink); background: rgba(60, 66, 76, 0.95); }
+.dash-grip.e svg { transform: rotate(90deg); }
+/* the invisible strips along every edge and the corners that also resize it */
+.dash-edge { position: absolute; z-index: 2; }
+.dash-edge.n, .dash-edge.s { left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.dash-edge.n { top: -4px; } .dash-edge.s { bottom: -4px; }
+.dash-edge.e, .dash-edge.w { top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.dash-edge.e { right: -4px; } .dash-edge.w { left: -4px; }
+.dash-edge.ne, .dash-edge.nw, .dash-edge.se, .dash-edge.sw { width: 16px; height: 16px; }
+.dash-edge.nw { left: -4px; top: -4px; cursor: nwse-resize; } .dash-edge.se { right: -4px; bottom: -4px; cursor: nwse-resize; }
+.dash-edge.ne { right: -4px; top: -4px; cursor: nesw-resize; } .dash-edge.sw { left: -4px; bottom: -4px; cursor: nesw-resize; }
+.dash.held .dash-grip, .dash.held .dash-edge { pointer-events: auto; }
 .blur-always .dash, .blur-motion .dash { backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%); }
 .dash-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; cursor: grab; user-select: none;
   padding-bottom: 10px; border-bottom: var(--hair) solid var(--glass-line); }
@@ -216,7 +328,17 @@ button { font: inherit; color: inherit; }
 .dash-close { flex: none; display: grid; place-items: center; background: rgba(255,255,255,0.06); border-color: transparent;
   color: var(--ink-2); cursor: pointer; }
 .dash-close:hover { color: var(--ink); background: rgba(255,255,255,0.14); }
-.dash-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.dash-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2, minmax(200px, 1fr));
+  gap: 12px; margin-top: 12px; overflow-y: auto; }
+/* a narrow window stacks the panels; a wide, short one lays all four in a row; a short
+   one drops the sentence under the numbers */
+@container (max-width: 760px) {
+  .dash-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: minmax(240px, 1fr); }
+}
+@container (min-width: 1400px) and (max-height: 620px) {
+  .dash-grid { grid-template-columns: repeat(4, 1fr); grid-template-rows: minmax(200px, 1fr); }
+}
+@container (max-height: 520px) { .dash-story { display: none; } }
 .dash-panel { min-width: 0; min-height: 0; overflow: auto; padding: 10px 12px; border-radius: 14px;
   background: rgba(255,255,255,0.03); border: var(--hair) solid var(--glass-line); }
 /* a chart shrinks to the panel's height (its viewBox keeps the shape) rather than scrolling */
@@ -313,7 +435,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- time card: foot of the right column, in the spirit of kepler's enlarged
    playback widget. kepler's own widget stays mounted (hidden) to run the animation. ---------- */
-.time-card { position: absolute; right: var(--gap); bottom: calc(var(--edge) + var(--card-h) + 12px); width: var(--graph-w);
+.time-card { position: absolute; right: var(--gap); bottom: calc(var(--floor) + var(--card-h) + 12px); width: var(--graph-w);
   box-sizing: border-box; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
 .tc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .tc-date { display: flex; flex-direction: column; }
@@ -341,8 +463,8 @@ button { font: inherit; color: inherit; }
   --sheen: linear-gradient(180deg, rgba(255,255,255,0.065) 0%, rgba(255,255,255,0.015) 42%, rgba(255,255,255,0) 100%);
   --shadow: inset 0 1px 0 rgba(255,255,255,0.07), 0 0 0 1px rgba(0,0,0,0.22), 0 22px 54px -14px rgba(0,0,0,0.62);
   --r-lg: 26px; --r-md: 20px; --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  font-family: 'Inter Variable', Inter, Pretendard, system-ui, sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
+  font-family: var(--sans);
+  font-feature-settings: 'calt';
   -webkit-font-smoothing: antialiased;
   color: var(--ink);
 }
@@ -357,7 +479,7 @@ button { font: inherit; color: inherit; }
 /* ---------- bottom drawer ---------- */
 /* Bottom-anchored: when the lists open, the drawer grows upward and the theme cards
    ride up on top of the rising sheet. It sits above everything else while open. */
-.drawer { position: absolute; left: var(--edge); right: var(--edge); bottom: var(--edge); z-index: 5; }
+.drawer { position: absolute; left: var(--inset); right: var(--edge); bottom: var(--floor); z-index: 5; }
 .drawer-sheet { position: absolute; left: -8px; right: -8px; bottom: calc(-1 * var(--edge)); height: 0; opacity: 0;
   border-radius: var(--r-lg) var(--r-lg) 0 0; border-bottom: 0; pointer-events: none;
   transition: height 0.42s var(--ease), opacity 0.22s; }
@@ -373,7 +495,7 @@ button { font: inherit; color: inherit; }
    and the lists that rise under it use the drawer's newer design. */
 .drawer .dcard { height: var(--card-h); box-sizing: border-box; padding: 12px 14px; text-align: left; min-width: 0;
   display: flex; flex-direction: column; gap: 2px; cursor: pointer;
-  font-family: Inter, "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif; color: #eef2f7;
+  font-family: var(--sans); color: #eef2f7;
   background: rgba(16, 19, 24, 0.55); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px; box-shadow: none;
   backdrop-filter: blur(14px) saturate(120%); -webkit-backdrop-filter: blur(14px) saturate(120%); }
 /* the icon sits in front of the card's text; on narrow screens the text keeps the room */
@@ -417,7 +539,7 @@ button { font: inherit; color: inherit; }
 
 /* ---------- kepler, restyled from outside (v3.2.6 class names) ---------- */
 /* Its time widget stays mounted — it runs the animation loop — but the time card is the face. */
-body:not(.sandbox) .kepler-gl > div:has(> .bottom-widget--container) { display: none !important; }
+body:not(.sandbox):not(.time-expanded) .kepler-gl > div:has(> .bottom-widget--container) { display: none !important; }
 
 /* kepler's settings panel: hidden while closed (the gear buttons are the only way in),
    and when open it lives between the top bar and the drawer cards. */
@@ -455,7 +577,7 @@ body:not(.sandbox) .side-panel--container .add-layer-button { display: none !imp
    narrow screen keeps usable halves. Each half's canvases size to their own box (deck
    and maplibre both follow their container), so only the boxes need to change. */
 /* the frost column is drawn at the overlay's zoom; the map is not, so its width is scaled here */
-body.kepler-split .kepler-gl .maps { padding-left: min(calc(var(--frost-w) * var(--ui-zoom)), 25%); box-sizing: border-box;
+body.kepler-split .kepler-gl .maps { padding-left: min(calc((var(--inset) + var(--frost-w) - var(--gap)) * var(--ui-zoom)), 30%); box-sizing: border-box;
   /* the strip left of the maps: a soft amber glow from the top, settling into slate,
      then the frost column above it blurs and darkens it like it would the map */
   background:
@@ -470,7 +592,7 @@ body:not(.sandbox) .side-panel--container .side-bar__close { display: none !impo
 body.kepler-side-open .side-panel--container, body.sandbox .side-panel--container {
   zoom: var(--ui-zoom);   /* like the overlay (uiScale.ts); its offsets below scale with it */
   top: calc(var(--topbar-h) + var(--gap) * 2) !important;
-  bottom: calc(var(--edge) + var(--card-h) + var(--gap)) !important;
+  bottom: calc(var(--floor) + var(--card-h) + var(--gap)) !important;
   height: auto !important;
 }
 
@@ -479,8 +601,8 @@ body.kepler-side-open .side-panel--container, body.sandbox .side-panel--containe
 .map-annotations { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; z-index: 9; pointer-events: none; }
 
 /* ---------- settings: a glass panel dropping from the top bar ---------- */
-.settings { position: absolute; z-index: 31; top: calc(8px + var(--topbar-h) + 8px); right: calc(var(--gap) + 140px);   /* left is set under the tab */
-  width: 300px; box-sizing: border-box; padding: 6px 14px 12px; background: var(--glass-bg-solid);
+.settings { position: absolute; z-index: 31; left: var(--inset); bottom: var(--floor);   /* set beside the tab (SettingsPanel) */
+  max-height: calc(var(--ui-h) - var(--topbar-h) - 40px); overflow-y: auto; width: 300px; box-sizing: border-box; padding: 6px 14px 12px; background: var(--glass-bg-solid);
   box-shadow: 0 24px 60px -18px rgba(0,0,0,0.7); animation: setIn 0.16s ease-out; }
 @keyframes setIn { from { opacity: 0; transform: translateY(-6px); } }
 .blur-always .settings, .blur-motion .settings { backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
@@ -491,6 +613,35 @@ body.kepler-side-open .side-panel--container, body.sandbox .side-panel--containe
 .set-seg button { border: 0; background: none; border-radius: 999px; padding: 5px 0; font-size: 12px; color: var(--ink-2); cursor: pointer; }
 .set-seg button:hover { color: var(--ink); }
 .set-seg button.on { color: var(--ink); background: rgba(255,255,255,0.12); }
+/* the panel's own menu along its top: the segmented pill, which now only ever means "section" */
+.set-tabs { margin: 8px 0 4px; grid-template-columns: 1fr 1fr; }
+.set-tabs button { padding: 6px 0; }
+.settings section:last-child { border-bottom: 0; }
+/* 3D look: two picture tiles, captures of the real map in each look (same frame as the basemaps) */
+.set-looks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.set-look { display: flex; flex-direction: column; gap: 5px; padding: 0; border: 0; background: none; text-align: left;
+  font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.set-look img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 9px; box-sizing: border-box;
+  border: var(--hair) solid rgba(255,255,255,0.1); transition: box-shadow 0.15s, border-color 0.15s; }
+.set-look span { display: flex; flex-direction: column; gap: 1px; }
+.set-look small { font-size: 10.5px; color: var(--ink-3); }
+.set-look:hover { color: var(--ink); }
+.set-look:hover img { border-color: rgba(255,255,255,0.3); }
+.set-look.on { color: var(--ink); }
+.set-look.on img { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 14px -4px rgba(232, 163, 92, 0.45); }
+
+/* base map: a row of small map previews, each in that style's own colours */
+.set-maps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.set-map { position: relative; display: flex; flex-direction: column; gap: 5px; padding: 0; border: 0; background: none;
+  font-size: 11.5px; color: var(--ink-3); cursor: pointer; }
+.set-map svg { display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 9px; box-sizing: border-box;
+  border: var(--hair) solid rgba(255,255,255,0.1); transition: box-shadow 0.15s, border-color 0.15s; }
+.set-map:hover { color: var(--ink); }
+.set-map:hover svg { border-color: rgba(255,255,255,0.3); }
+.set-map.on { color: var(--ink); }
+.set-map.on svg { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 4px 14px -4px rgba(232, 163, 92, 0.45); }
+.set-map.on::after { content: ''; position: absolute; top: 4px; right: 4px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316191e' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E") center / 9px no-repeat; }
 .set-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
 .set-chips button { border: var(--hair) solid var(--glass-line); background: rgba(255,255,255,0.03); border-radius: 999px;
   padding: 3px 10px; font-size: 12px; color: var(--ink-3); cursor: pointer; }
@@ -623,3 +774,52 @@ body.kepler-side-open .side-panel--container, body.sandbox .side-panel--containe
 @media (max-width: 1100px) { .sb-hint { display: none; } }
 /* kepler's map controls sit below the top bar, clear of it */
 body.sandbox .kepler-gl .map-control { top: calc(8px + var(--topbar-h) * var(--ui-zoom) + 12px) !important; }
+
+/* ---------- the atlas's own filter, in a variable's card (RangeFilter) ---------- */
+.lc-filter { flex: none; width: 22px; height: 22px; margin-left: 2px; border-radius: 6px; border: 0; background: none;
+  display: inline-grid; place-items: center; color: var(--ink-3); cursor: pointer; transition: color 0.12s, background-color 0.12s; }
+.lc-filter:hover, .lc-filter.open { color: var(--ink); background: rgba(255,255,255,0.08); }
+.lc-filter.on { color: var(--accent); }
+.rf { margin-top: 8px; padding: 8px 2px 2px; border-top: var(--hair) dashed var(--glass-line); }
+.rf-hist { display: flex; align-items: flex-end; gap: 1px; height: 28px; }
+.rf-hist i { flex: 1; min-height: 1px; border-radius: 1px 1px 0 0; background: rgba(255,255,255,0.14); }
+.rf-hist i.in { background: rgba(232, 163, 92, 0.75); }
+/* a hairline track; the handles are small glass dots with a light rim and a soft amber halo */
+.rf-track { position: relative; height: 18px; margin: 2px 0 0; touch-action: none; }
+.rf-track::before { content: ''; position: absolute; left: 0; right: 0; top: 8px; height: 2px; border-radius: 2px; background: rgba(255,255,255,0.12); }
+.rf-band { position: absolute; top: 8px; height: 2px; border-radius: 2px; background: var(--accent); }
+.rf-thumb { position: absolute; top: 2px; width: 14px; height: 14px; margin-left: -7px; padding: 0; border-radius: 50%;
+  border: 1.5px solid #f4f1ea; background: rgba(30, 34, 41, 0.7); cursor: ew-resize;
+  box-shadow: 0 0 0 4px rgba(232, 163, 92, 0.18), 0 2px 8px rgba(0,0,0,0.5);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: box-shadow 0.15s; }
+.rf-thumb:hover, .rf-thumb:active { box-shadow: 0 0 0 6px rgba(232, 163, 92, 0.3), 0 2px 8px rgba(0,0,0,0.5); }
+.rf-vals { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; font-size: 10.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rf-count { color: var(--accent); }
+.rf-reset { margin-top: 4px; padding: 0; border: 0; background: none; font-size: 10px; color: var(--ink-3); cursor: pointer; text-decoration: underline; }
+.rf-reset:hover { color: var(--ink); }
+
+/* ---------- Time, larger: kepler's own playback widget in our glass ---------- */
+.tc-expand { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 4px; padding: 0; border: 0;
+  border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; }
+.tc-expand:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
+/* it sits above the variable cards, between the Focus column and the right edge */
+body.time-expanded .kepler-gl > div:has(> .bottom-widget--container) {
+  bottom: calc((var(--floor) + var(--card-h) + 12px) * var(--ui-zoom)) !important;
+  left: calc((var(--inset) + var(--frost-w) - var(--gap) + 8px) * var(--ui-zoom)) !important; right: calc(var(--gap) * var(--ui-zoom)) !important;
+  width: auto !important; z-index: 10; }   /* over the names and dashed lines (z 9), under our panels */
+body.time-expanded .bottom-widget--container { width: 100% !important; padding: 0 !important; }
+body.time-expanded .bottom-widget--inner { border-radius: var(--radius); border: var(--hair) solid var(--glass-line);
+  background: var(--glass-bg-solid) !important; box-shadow: 0 24px 60px -18px rgba(0,0,0,0.7);
+  backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%); }
+/* its title is the time field of every dataset it spans, run together ("datedate") */
+body.time-expanded .bottom-widget__field > :last-child { display: none; }
+body.time-expanded .bottom-widget__field::after { content: 'Timeline · 2024'; font-size: 12px; font-weight: 500; color: var(--ink); margin-left: 6px; }
+
+/* the distance scale and zoom level (MapScale.tsx), with the hex grid: above the variable
+   cards beside the Focus column, never in the pointer's way */
+.map-scale { position: absolute; z-index: 4; pointer-events: none; display: flex; align-items: flex-end; gap: 8px;
+  left: calc(var(--inset) + var(--frost-w) - var(--gap) + 14px); bottom: calc(var(--floor) + var(--card-h) + 14px); }
+.ms-zoom { height: 16px; padding: 0 7px; border-radius: 999px; background: rgba(16, 19, 24, 0.45); color: var(--ink-3);
+  font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ms-bar { box-sizing: border-box; height: 16px; padding: 0 5px; border: 1px solid rgba(236, 240, 246, 0.55); border-top: 0;
+  background: rgba(16, 19, 24, 0.45); color: var(--ink-2); font-size: 10px; line-height: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }

@@ -5,6 +5,7 @@ import type {Focus} from './Overlay';
 import {valuesByPlace} from './focusValues';
 import {dataIdFor, type Grain} from './layers';
 import {BIVARIATE, thirdsOf} from './pair';
+import {ourFilterId} from './ourFilters';
 
 // The scatter shared by the 2D graph card and the dashboard: one variable on one axis as
 // a beeswarm, two as x (B) against y (A). A dot is a place at the current grain.
@@ -13,9 +14,14 @@ export type Box = {W: number; H: number; pad: {l: number; r: number; t: number; 
 
 // Each variable's value per place now — static ones as they are, daily ones on the
 // playing day (the rows the time filter lets through).
+// With the atlas's own filters (ourFilters.ts), a place one variable's range removed
+// leaves every series, so the panels count and plot the same places as the map.
 export function placeSeries(datasets: any, vars: Variable[], grain: Grain, filters: any[]) {
   const keyField = grain === 'dong' ? 'dong_code' : 'gu_code';
-  return vars.map((x) => valuesByPlace(datasets?.[x.dataset === 'dong' ? grain : dataIdFor(x, grain)], x.key, keyField, filters));
+  const series = vars.map((x) => valuesByPlace(datasets?.[x.dataset === 'dong' ? grain : dataIdFor(x, grain)], x.key, keyField, filters));
+  const narrowed = series.filter((_, i) => filters.some((f: any) => f.id === ourFilterId(vars[i].key)));
+  if (!narrowed.length) return series;
+  return series.map((s) => new Map([...s].filter(([code]) => narrowed.every((n) => n.has(code)))));
 }
 
 // Positions: x always the last variable (B, or the only one), y the first (A) when two —

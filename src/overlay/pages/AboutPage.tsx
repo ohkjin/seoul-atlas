@@ -21,7 +21,7 @@ const LOGOS = [
 
 export default function AboutPage({onClose}: {onClose: () => void}) {
   return (
-    <Page label="About" onClose={onClose}>
+    <Page label="Credits" onClose={onClose}>
       <div className="page-eyebrow">Research Prototype</div>
       <h1 className="page-title">Seoul Data Atlas</h1>
       <p className="page-lede">

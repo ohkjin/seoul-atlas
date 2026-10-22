@@ -3,6 +3,7 @@ import {VAR_BY_KEY, isTemporal, type Variable} from '../../data/catalog';
 import type {Place} from '../../data/uhus';
 import {fmt} from '../focusValues';
 import {placeSeries} from '../scatter';
+import {ourFiltersKey} from '../ourFilters';
 import type {DashCtx} from './Dashboard';
 
 const DAY = 86400000;
@@ -32,7 +33,7 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
   // per-step dataset objects (see Dashboard)
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, tileVars, level, filters),
-    [tileVars, level, datasetKeys, day]);   // eslint-disable-line react-hooks/exhaustive-deps
+    [tileVars, level, datasetKeys, day, ourFiltersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
   const stats = useMemo(() => tileVars.map((x, i) => statsOf(series[i], code)), [series, code]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const date = new Date(day * DAY);

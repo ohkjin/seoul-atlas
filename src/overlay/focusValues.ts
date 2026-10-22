@@ -112,6 +112,29 @@ export function extentOf(dataset: any, key: string): [number, number] | null {
   return lo <= hi ? [lo, hi] : null;
 }
 
+// A field's distribution in equal bins over [lo, hi] — every row (a daily variable: the
+// whole year), counted once per rows and kept.
+const histCache = new WeakMap<object, Map<string, number[]>>();
+export function histogramOf(dataset: any, key: string, extent: [number, number], bins = 24): number[] {
+  const field = dataset?.fields?.find((f: any) => f.name === key);
+  if (!field) return [];
+  const dc = dataset.dataContainer;
+  let byKey = histCache.get(dc);
+  if (!byKey) { byKey = new Map(); histCache.set(dc, byKey); }
+  const id = `${key}:${extent[0]}:${extent[1]}:${bins}`;
+  let h = byKey.get(id);
+  if (!h) {
+    h = new Array(bins).fill(0);
+    const col = numericColumn(dataset, field), span = extent[1] - extent[0] || 1;
+    for (let i = 0; i < col.length; i++) {
+      const v = col[i];
+      if (Number.isFinite(v)) h[Math.min(bins - 1, Math.max(0, Math.floor(((v - extent[0]) / span) * bins)))]++;
+    }
+    byKey.set(id, h);
+  }
+  return h;
+}
+
 // Numbers for small, glanceable cards: 3 significant figures, and Korean-style
 // magnitude words for the large sales totals (억 = 1e8, 조 = 1e12).
 // Every place's value of one field — one per place, over the rows that pass the current

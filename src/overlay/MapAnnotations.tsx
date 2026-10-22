@@ -16,7 +16,7 @@ import {useKepler} from './useKepler';
 //   boundaries: districts in a dashed line, neighbourhoods in a finer one once zoomed in.
 // Lines lie on the ground, so with the map tilted into 3D they would cut across raised
 // areas; boundaries are left out then, the names stay.
-export type Annotations = {names: boolean; boundaries: boolean};
+export type Annotations = {names: boolean; boundaries: boolean; hexFar: boolean};   // hexFar: layers.ts cellView
 
 const DONG_NAMES_FROM = 12;        // zoom at which neighbourhood names replace district names
 const DONG_LINES_FROM = 11.2;      // zoom at which neighbourhood boundaries appear
@@ -95,7 +95,7 @@ export default function MapAnnotations({data, show}: {data: UhusData; show: Anno
       if (show.names) {
         const dong = m.zoom >= DONG_NAMES_FROM;
         const shapes = dong ? dongs : gus;
-        ctx.font = dong ? '400 10px "Segoe UI", Inter, system-ui, sans-serif' : '600 10px "Segoe UI", Inter, system-ui, sans-serif';
+        ctx.font = dong ? '500 10px "Manrope Variable", "Segoe UI", system-ui, sans-serif' : '700 10px "Manrope Variable", "Segoe UI", system-ui, sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.lineJoin = 'round'; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(10, 12, 15, 0.75)';
         ctx.fillStyle = dong ? 'rgba(236, 240, 246, 0.82)' : 'rgba(236, 240, 246, 0.92)';

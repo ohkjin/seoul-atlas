@@ -6,6 +6,7 @@ import {useKepler} from './useKepler';
 import {VAR_BY_KEY, isTemporal} from '../data/catalog';
 import {dataIdFor, type Grain} from './layers';
 import {fmt, numericColumn} from './focusValues';
+import {Maximize2} from 'lucide-react';
 
 const DAY = 86400000;
 const SPEEDS = [0.5, 1, 2];
@@ -20,8 +21,9 @@ const W = 288, H = 64;   // chart viewBox; the SVG scales to the card width
 // daily data joined, ~13 ms a frame, which held playback near 30fps. The data is daily, so
 // nothing new shows between midnights anyway: stepping by day costs that 10–20 times a
 // second instead of 60, and the map keeps its frame rate in between.
-type Props = {focus: Focus; selection: string[]; grain: Grain; playing: boolean; onPlaying: (on: boolean) => void};
-export default function TimeCard({focus, selection, grain, playing, onPlaying}: Props) {
+type Props = {focus: Focus; selection: string[]; grain: Grain; playing: boolean; onPlaying: (on: boolean) => void;
+  onExpand: () => void};
+export default function TimeCard({focus, selection, grain, playing, onPlaying, onExpand}: Props) {
   const dispatch = useDispatch();
   const store = useStore<any>();
   const kepler = useKepler();
@@ -114,6 +116,9 @@ export default function TimeCard({focus, selection, grain, playing, onPlaying}: 
             <button key={s} className={s === speed ? 'on' : ''}
               onClick={() => dispatch(updateFilterAnimationSpeed(idx, s) as any)}>{s}×</button>
           ))}
+          {/* larger: kepler's own playback widget, with its chart and window controls */}
+          <button className="tc-expand" onClick={onExpand} title="Larger timeline — chart, window and playback options"
+            aria-label="Open the larger timeline"><Maximize2 size={12} strokeWidth={1.9} /></button>
         </div>
       </div>
 

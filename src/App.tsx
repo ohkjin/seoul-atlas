@@ -30,7 +30,9 @@ export default function App() {
           datasets: [
             {info: {id: 'dong', label: 'Dong'}, data: d.dong},
             {info: {id: 'gu', label: 'Gu'}, data: d.gu},
-            {info: {id: 'gu_daily', label: 'Gu · daily'}, data: d.guDaily}
+            {info: {id: 'gu_daily', label: 'Gu · daily'}, data: d.guDaily},
+            {info: {id: 'dong_cells', label: 'Dong · cells'}, data: d.dongCells},
+            {info: {id: 'gu_cells', label: 'Gu · cells'}, data: d.guCells}
           ],
           options: {centerMap: false, readOnly: false},
           config: mapConfig

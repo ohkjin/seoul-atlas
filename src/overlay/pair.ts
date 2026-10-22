@@ -1,5 +1,5 @@
 import {addDataToMap, layerVisConfigChange, layerVisualChannelConfigChange} from '@kepler.gl/actions';
-import {VAR_BY_KEY, heightScaleFor, paletteRange, type Variable} from '../data/catalog';
+import {AREA_STROKE, VAR_BY_KEY, heightScaleFor, paletteRange, type Variable} from '../data/catalog';
 import {valuesByPlace} from './focusValues';
 import {displayNameOf, type UhusData} from '../data/uhus';
 import type {Grain} from './layers';
@@ -17,7 +17,12 @@ export const pairIdOf = (a: string, b: string) => `bi:${a}:${b}`;
 // bc:A:B is a daily pair in 3D: bubbles for two daily variables, raised areas for a daily
 // and a static one (A the daily colour, B the static height)
 export const columnPairIdOf = (a: string, b: string) => `bc:${a}:${b}`;
-export const pairKeysOf = (id: string) => (id.startsWith('bi:') || id.startsWith('bc:') ? id.slice(3).split(':') : null);
+// hb:A:B is two static variables in 3D: the cells, colour A, height B
+export const cellPairIdOf = (a: string, b: string) => `hb:${a}:${b}`;
+// hc:D:S is the raised static × daily pair seen from afar: on the cells
+export const cellMixedIdOf = (d: string, s: string) => `hc:${d}:${s}`;
+export const pairKeysOf = (id: string) =>
+  (['bi:', 'bc:', 'hb:', 'hc:'].some((p) => id.startsWith(p)) ? id.slice(3).split(':') : null);
 export const pairDataIdOf = (grain: Grain) => `${grain}_pair`;
 export const isPairDataId = (id: string) => id.endsWith('_pair');
 
@@ -76,7 +81,7 @@ export function addPair(dispatch: Dispatch, data: UhusData, grain: Grain, a: Var
   const layer = {
     id: pairIdOf(a.key, b.key), type: 'geojson',
     config: {dataId, label: `${a.short} × ${b.short}`, columns: {geojson: '_geojson'}, isVisible: true,
-      visConfig: {opacity: 0.85, filled: true, stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.7, thickness: 0.5,
+      visConfig: {opacity: 0.85, filled: true, ...AREA_STROKE,
         elevationScale: 5, ...pairVisConfig(a, b, is3d)}},
     visualChannels: {...pairColourChannel(a, is3d), heightField: {name: b.key, type: 'real'}, heightScale: 'linear'}
   };
@@ -106,7 +111,8 @@ function blueRed() {
 // static pair is: the grid says where it is hotter or wetter than elsewhere today. Cut by
 // the whole year instead (the basis of the single daily colours), a day's weather — about
 // the same all over Seoul — put every place in one third, and the map showed two colours.
-const NO_DATA = '#3a3f48';
+// a place with no value — or one the atlas's filter took out — recedes to near the basemap
+const NO_DATA = '#202329';
 const codeFieldOf = (areaId: string) => (areaId.startsWith('dong') ? 'dong_code' : 'gu_code');
 const dailyRange = (colorMap: [string, string][]) =>
   ({name: 'Seoul bivariate · daily', type: 'custom', category: 'Custom', colors: [...BIVARIATE.flat(), NO_DATA], colorMap});
@@ -116,7 +122,7 @@ export function dailyPairConfig(a: Variable, b: Variable, areaId: string) {
     id: pairIdOf(a.key, b.key), type: 'geojson',
     config: {dataId: areaId, label: `${a.short} × ${b.short}`, columns: {geojson: '_geojson'}, isVisible: true,
       colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
-      visConfig: {opacity: 0.85, filled: true, stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.7, thickness: 0.5,
+      visConfig: {opacity: 0.85, filled: true, ...AREA_STROKE,
         colorRange: dailyRange([])}},
     visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal'}
   };
@@ -124,7 +130,8 @@ export function dailyPairConfig(a: Variable, b: Variable, areaId: string) {
 
 // A pair layer drawn as the 3×3 grid (2D): the static pair's class field or the daily
 // pair's place-code colour map — both customOrdinal. The daily one sits on the areas.
-export const isBivariateLayer = (layer: any) => !!layer && layer.id.startsWith('bi:') && layer.config.colorScale === 'customOrdinal';
+export const isBivariateLayer = (layer: any) => !!layer && ['bi:', 'hb:', 'hc:'].some((p) => layer.id.startsWith(p))
+  && layer.config.colorScale === 'customOrdinal';
 export const isDailyBivariate = (layer: any) => isBivariateLayer(layer) && !isPairDataId(layer.config.dataId);
 // Its colours by place code, for the graph's dots and the legend's ringed cell.
 export const dailyColoursOf = (layer: any) =>
@@ -141,7 +148,10 @@ export function cellOf(colour: string | undefined): [number, number] | null {
 export function recolourDailyPair(dispatch: Dispatch, visState: any) {
   for (const layer of visState?.layers || []) {
     if (!layer.config.isVisible) continue;
-    const grid = layer.id.startsWith('bi:') && (layer.config.dataId === 'dong' || layer.config.dataId === 'gu');
+    // the 3×3 grid: on the areas in 2D (bi:), on the cells from afar in 3D (hb:, hc:)
+    const grid = (layer.id.startsWith('bi:') && (layer.config.dataId === 'dong' || layer.config.dataId === 'gu'))
+      || layer.id.startsWith('hb:') || layer.id.startsWith('hc:');
+    // bc: bubbles and the raised pair: coloured by the daily one's quartiles
     const bubbles = layer.id.startsWith('bc:');
     if (!grid && !bubbles) continue;
     const keys = pairKeysOf(layer.id);
@@ -230,12 +240,31 @@ export function dailyRaisedPairConfig(daily: Variable, stat: Variable, areaId: s
     id: columnPairIdOf(daily.key, stat.key), type: 'geojson',
     config: {dataId: areaId, label: `${daily.short} × ${stat.short}`, columns: {geojson: '_geojson'}, isVisible: true,
       colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
-      visConfig: {opacity: 0.85, filled: true, stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.7, thickness: 0.5,
+      visConfig: {opacity: 0.85, filled: true, ...AREA_STROKE,
         enable3d: true, elevationScale: 5, colorRange: bubbleRange([])}},
     visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
       heightField: {name: stat.key, type: 'real'}, heightScale: 'linear'}
   };
 }
+
+// Two variables in 3D seen from afar: the places' cells (uhus.ts cellsOf) lying flat on
+// the ground, each in its place's colour of the 3×3 grid — the 2D map's colours as a hex
+// grid. Coloured by place code like the daily grid (recolourDailyPair); two static
+// variables (hb:) keep their colours, one daily (hc:) changes them day by day.
+function cellGridConfig(id: string, a: Variable, b: Variable, cellsId: string) {
+  const key = codeFieldOf(cellsId);
+  return {
+    id, type: 'hexagonId',
+    config: {dataId: cellsId, label: `${a.short} × ${b.short}`, columns: {hex_id: 'h3'}, isVisible: true,
+      colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal',
+      visConfig: {opacity: 0.9, coverage: 0.72, enable3d: false, colorRange: dailyRange([])}},
+    visualChannels: {colorField: {name: key, type: 'string'}, colorScale: 'customOrdinal'}
+  };
+}
+export const dailyRaisedCellsConfig = (daily: Variable, stat: Variable, cellsId: string) =>
+  cellGridConfig(cellMixedIdOf(daily.key, stat.key), daily, stat, cellsId);
+export const cellPairConfig = (a: Variable, b: Variable, cellsId: string) =>
+  cellGridConfig(cellPairIdOf(a.key, b.key), a, b, cellsId);
 
 // The parts of the pair layer that change with the mode.
 export const pairVisConfig = (a: Variable, b: Variable, is3d: boolean) =>

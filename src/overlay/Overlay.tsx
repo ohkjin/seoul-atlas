@@ -1,4 +1,5 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
+import {X} from 'lucide-react';
 import {useDispatch, useStore} from 'react-redux';
 import {cancelFlight, flyToBounds, flyToView} from './flyTo';
 import type {Bounds, Place, UhusData} from '../data/uhus';
@@ -6,23 +7,28 @@ import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
 import {useKepler} from './useKepler';
-import {addDataToMap, onLayerClick, setFilter, togglePerspective} from '@kepler.gl/actions';
-import {adaptElevation, drawSelection, layersOnMap, nextSelection, planFor, restylePair, sync3d, syncOrder,
+import {addDataToMap, onLayerClick, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
+import {adaptElevation, drawSelection, layersOnMap, nextSelection, planFor, restylePair, setCellView, sync3d, syncOrder,
   syncTooltip, type Grain} from './layers';
 import {pairKeysOf, recolourDailyPair} from './pair';
-import TopBar, {type PageId} from './TopBar';
+import TopBar, {SideRail, type PageId} from './TopBar';
+import SearchBox from './SearchBox';
+import StatusBar from './StatusBar';
 import FocusBlock from './FocusBlock';
 import GraphCard from './GraphCard';
 import Drawer from './Drawer';
 import TimeCard from './TimeCard';
 import Dashboard from './dashboard/Dashboard';
-import SettingsPanel, {rememberedAnnotations, restoreSettings} from './SettingsPanel';
+import SettingsPanel, {rememberedAnnotations, rememberedFx, restoreSettings} from './SettingsPanel';
+import {isHaloId, syncEffects, syncHalos, type Fx} from './effects';
 import MapAnnotations, {type Annotations} from './MapAnnotations';
 import DataPage from './pages/DataPage';
 import AboutPage from './pages/AboutPage';
 import {useUiScale} from './uiScale';
 import {enterSandbox, leaveSandbox} from './sandbox';
 import SandboxBar from './SandboxBar';
+import MapScale from './MapScale';
+import {ourFiltersKey, syncOurFilters, type Ranges} from './ourFilters';
 import {showDongOutline} from './outline';
 
 export type Focus = {level: 'seoul'} | {level: 'gu'; gu: Place} | {level: 'dong'; gu: Place; dong: Place};
@@ -50,6 +56,10 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const [selection, setSelection] = useState<string[]>(INITIAL_ON_MAP);
   const select = (key: string) => setSelection((s) => nextSelection(s, key));
   const [linked, setLinked] = useState(true);
+  // the atlas's own filters: a value range per selected variable (ourFilters.ts)
+  const [ranges, setRanges] = useState<Ranges>({});
+  const setRange = (key: string, r: [number, number] | null) =>
+    setRanges((cur) => { const next = {...cur}; if (r) next[key] = r; else delete next[key]; return next; });
   // daily playback (the time card steps day by day; see TimeCard)
   const [playing, setPlaying] = useState(false);
   const [dashboardOpen, setDashboardOpen] = useState(false);
@@ -58,8 +68,21 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   // gu and dong names and dashed boundaries over the map (Settings → Map layers)
   const [annotations, setAnnotations] = useState<Annotations>(rememberedAnnotations);
+  // the night-city light: glow, halos, light & shadow, vignette (effects.ts; Settings → Effects)
+  const [fx, setFx] = useState<Fx>(rememberedFx);
   const closePage = useStableClose(() => setPage('map'));
   const closeSettings = useStableClose(() => setSettingsOpen(false));
+  // Clean mode (the earlier atlas's): every panel steps aside but the place's name and the
+  // status bar — the map alone, still live. Left by its button at the top right, or Esc.
+  const [clean, setClean] = useState(false);
+  const enterClean = () => { setSettingsOpen(false); setDashboardOpen(false); setClean(true); };
+  useEffect(() => {
+    document.body.classList.toggle('clean-mode', clean);
+    if (!clean) return;
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setClean(false); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [clean]);
   // Sandbox: the map is kepler's alone — every atlas effect below stands aside (sandbox.ts)
   const sandbox = page === 'sandbox';
   const setGrain = (g: Grain) => setGrainState(g);   // drawSelection redraws for the new grain
@@ -132,6 +155,14 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // different area layer comes on — not on every change, so a height turned off in
   // kepler's panel stays off.
   const is3d = !!kepler?.mapState?.dragRotate;
+  // 3D from afar: the areas as a flat hex grid (layers.ts cellView) — below zoom 8.8, and
+  // once in it, back to the areas only from 9.0, so it does not flicker at the edge.
+  // Settings → Map layers switches it off.
+  const cellRef = useRef(false);
+  const zoomNow = kepler?.mapState?.zoom ?? 0;
+  cellRef.current = annotations.hexFar && (cellRef.current ? zoomNow < 9.0 : zoomNow < 8.8);
+  setCellView(cellRef.current);
+  const cellView = is3d && cellRef.current;
   const toggle3d = () => dispatch(togglePerspective() as any);
   const fillIds = layersOnMap(visState).filter((x) => x.layer.type === 'geojson').map((x) => x.layer.id).join(',');
   const lastHeights = useRef<{is3d: boolean; fillIds: string} | null>(null);
@@ -175,17 +206,18 @@ export default function Overlay({data}: {data: UhusData | null}) {
     lastDraw.current = rest;
     // the store as of right now ('map' is the KeplerGl id in App.tsx)
     drawSelection(dispatch, () => store.getState().keplerGl.map.visState, {selection, linked, grain, is3d, data, modeOnly});
-  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox, cellView]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pairLayerId = (visState?.layers || []).find((l: any) => l.config.isVisible && pairKeysOf(l.id))?.id;
   // the daily pair's grid takes the colours of the playing day (see pair.ts)
   const timeValue = timeIdx >= 0 ? visState.filters[timeIdx].value?.[0] : null;
   const playDay = timeValue != null ? Math.ceil(timeValue / 86400000) : null;
-  const dailyGrid = (visState?.layers || []).filter((l: any) => l.config.isVisible && (l.id.startsWith('bi:') || l.id.startsWith('bc:')))
+  const dailyGrid = (visState?.layers || []).filter((l: any) => l.config.isVisible && ['bi:', 'bc:', 'hb:', 'hc:'].some((p) => l.id.startsWith(p)))
     .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}`).join();
   useEffect(() => {
     if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState);
-  }, [playDay, dailyGrid, datasetKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (visState && !sandbox) restylePair(dispatch, visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playDay, dailyGrid, datasetKeys, sandbox, ourFiltersKey(visState?.filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // (the store as of now: a pair dropped in this render's draw must not be restyled)
+  useEffect(() => { if (visState && !sandbox) restylePair(dispatch, store.getState().keplerGl.map.visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!visState || sandbox) { lastHeights.current = null; return; }
     const last = lastHeights.current;
@@ -241,6 +273,58 @@ export default function Overlay({data}: {data: UhusData | null}) {
       leaveSandbox(dispatch, get);
     }
   }, [ready, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // a variable that leaves the selection takes its filter with it
+  useEffect(() => {
+    setRanges((cur) => (Object.keys(cur).every((k) => selection.includes(k)) ? cur
+      : Object.fromEntries(Object.entries(cur).filter(([k]) => selection.includes(k)))));
+  }, [selectionKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const rangesKey = JSON.stringify(ranges);
+  useEffect(() => {
+    if (!ready || sandbox) return;
+    syncOurFilters(dispatch, () => store.getState().keplerGl.map.visState, ranges);
+  }, [ready, rangesKey, datasetKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Time, larger: kepler's own playback widget — its chart with a chosen y-axis and plot
+  // type, the window and its handles, speeds — in place of our time card. It is kepler's
+  // filter view: 'enlarged' shows it; its own minify button gives the card back.
+  // kepler opens a time filter enlarged whatever the saved config says, so the view alone
+  // cannot tell: the card asks for it (timeBig), and the view is set back to minified otherwise.
+  const [timeBig, setTimeBig] = useState(false);
+  const timeView = timeIdx >= 0 ? visState.filters[timeIdx].view : null;
+  useEffect(() => {
+    if (timeIdx >= 0 && !timeBig && timeView === 'enlarged') dispatch(setFilterView(timeIdx, 'minified') as any);
+    if (timeBig && timeView && timeView !== 'enlarged') setTimeBig(false);   // kepler's own minify button
+  }, [timeIdx, timeView, timeBig]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const timeExpanded = timeBig && timeView === 'enlarged';
+  useEffect(() => { document.body.classList.toggle('time-expanded', timeExpanded && !sandbox); }, [timeExpanded, sandbox]);
+  const expandTime = () => {
+    setPlaying(false);
+    setTimeBig(true);
+    if (timeIdx < 0) return;
+    dispatch(setFilterView(timeIdx, 'enlarged') as any);
+    // its chart starts as the playing variable over the year for all of Seoul (a line of
+    // the district rows, summed or averaged as the variable is) — its default, a count of
+    // rows per day, is the same every day. Its own Y-axis menu changes it from there.
+    const x = selection.map((key) => VAR_BY_KEY[key]).find((v) => v && isTemporal(v));
+    const filter = visState.filters[timeIdx];
+    const field = x && visState.datasets[filter.dataId[0]]?.fields.find((f: any) => f.name === x.key);
+    if (field && !filter.yAxis) {
+      dispatch(setFilterPlot(timeIdx, {yAxis: field} as any) as any);
+      dispatch(setFilterPlot(timeIdx, {plotType: {type: 'lineChart', interval: '1-day', aggregation: x!.how === 'sum' ? 'sum' : 'average',
+        colorsByDataId: {gu_daily: '#e8a35c', dong_daily: '#7dbccc'}}} as any) as any);
+    }
+  };
+  // the light: blending and kepler's effects follow the switches and the 2D/3D mode; the
+  // halos follow their bubble layers — and the day, as the bubbles are recoloured daily
+  const fxKey = JSON.stringify(fx);
+  const bubbleKey = (visState?.layers || []).filter((l: any) => l.type === 'point' && l.config.isVisible && !isHaloId(l.id))
+    .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}:${l.config.sizeField?.name}`).join();
+  // (bubbleKey too: on the flat map the glow is on only while bubbles are — effects.ts)
+  useEffect(() => {
+    if (ready && !sandbox) syncEffects(dispatch, store.getState().keplerGl.map.visState, fx, is3d);
+  }, [ready, fxKey, is3d, sandbox, bubbleKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (ready) syncHalos(dispatch, () => store.getState().keplerGl.map.visState, fx.halo && !sandbox);
+  }, [ready, bubbleKey, fx.halo, playDay, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the basemap and map switches remembered from Settings, once the map is up
   const restored = useRef(false);
   useEffect(() => {
@@ -255,19 +339,29 @@ export default function Overlay({data}: {data: UhusData | null}) {
           fading out at the edges so it reads as no box at all. It must be the FIRST
           child — painted later, it frosted the top bar too and swallowed the tabs. */}
       {ready && !sidePanelOpen && !sandbox && <div className="focus-frost" aria-hidden />}
-      <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d}
-        page={page} onPage={(p) => { setPage(p); if (p === 'map') setDashboardOpen(false); }}
+      <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d} onClean={enterClean}
+        search={<SearchBox data={data} selection={selection} onGu={focusGu} onDong={focusDong} onVariable={select} />} />
+      {clean && (
+        <button className="clean-exit" onClick={() => setClean(false)}>
+          <X size={14} strokeWidth={2} aria-hidden />Exit clean mode<kbd>Esc</kbd>
+        </button>
+      )}
+      <SideRail page={page} onPage={(p) => { setPage(p); if (p === 'map') setDashboardOpen(false); }}
         dashboardOpen={dashboardOpen} onDashboard={() => { if (page !== 'map') { setPage('map'); setDashboardOpen(true); } else setDashboardOpen((v) => !v); }}
         settingsOpen={settingsOpen} onSettings={() => setSettingsOpen((v) => !v)} />
-      {settingsOpen && <SettingsPanel onClose={closeSettings} annotations={annotations} onAnnotations={setAnnotations} />}
+      {settingsOpen && <SettingsPanel onClose={closeSettings} annotations={annotations} onAnnotations={setAnnotations}
+        fx={fx} onFx={setFx} />}
       {ready && <MapAnnotations data={data!} show={annotations} />}
+      {/* the zoom and a distance scale come with the hex grid, to say where it starts */}
+      {ready && annotations.hexFar && !sandbox && <MapScale />}
       {/* kepler's settings panel opens on the left, where the Focus block sits, so the
           block steps aside while it is open instead of the two overlapping. */}
       {sandbox && <SandboxBar onBack={() => setPage('map')} />}
       {ready && !sidePanelOpen && !sandbox && (
         <FocusBlock data={data!} focus={focus} onSeoul={focusSeoul} onGu={focusGu} onDong={focusDong}
           grain={grain} onGrain={setGrain} selection={selection} linked={linked}
-          pairable={planFor(selection, linked, grain).pairable} onLink={() => setLinked((v) => !v)} />
+          pairable={planFor(selection, linked, grain).pairable} onLink={() => setLinked((v) => !v)}
+          ranges={ranges} onRange={setRange} />
       )}
       {ready && !sandbox && (
         <GraphCard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
@@ -277,7 +371,9 @@ export default function Overlay({data}: {data: UhusData | null}) {
             else { const g = data!.gus.find((x) => x.code === code); if (g) focusGu(g); }
           }} />
       )}
-      {ready && temporalOn && !sandbox && <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} />}
+      {ready && temporalOn && !sandbox && !timeExpanded && (
+        <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} onExpand={expandTime} />
+      )}
       {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select} />}
       {ready && dashboardOpen && !sandbox && (
         <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
@@ -287,6 +383,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
             else { const g = data!.gus.find((x) => x.code === code); if (g) focusGu(g); }
           }} />
       )}
+      {ready && !sandbox && <StatusBar selection={selection} />}
       {page === 'data' && <DataPage selection={selection} onSelect={select} onClose={closePage} />}
       {page === 'about' && <AboutPage onClose={closePage} />}
     </div>
@@ -304,10 +401,12 @@ function useStableClose(fn: () => void) {
 // A clicked polygon focuses its place: a dong under Dong detail, a district under Gu.
 // kepler keeps the source row index on the picked feature; that leads back to the code.
 function pickedPlace(clicked: any, visState: any): {level: 'dong' | 'gu'; code: string} | null {
-  if (!clicked?.layer || !(varOfLayerId(clicked.layer.id) || pairKeysOf(clicked.layer.id))) return null;
+  // a bubble's halo stands for its bubble
+  const layerId: string = clicked?.layer?.id?.startsWith('halo:') ? clicked.layer.id.slice(5) : clicked?.layer?.id;
+  if (!layerId || !(varOfLayerId(layerId) || pairKeysOf(layerId))) return null;
   // the deck layer carries kepler's layer id; kepler's layer knows which dataset it draws
-  const dataId = visState?.layers?.find((l: any) => l.id === clicked.layer.id)?.config.dataId;
-  const level = ({dong: 'dong', dong_pair: 'dong', dong_daily: 'dong', gu: 'gu', gu_pair: 'gu'} as Record<string, 'dong' | 'gu'>)[dataId] ?? null;
+  const dataId = visState?.layers?.find((l: any) => l.id === layerId)?.config.dataId;
+  const level = ({dong: 'dong', dong_pair: 'dong', dong_daily: 'dong', dong_cells: 'dong', gu: 'gu', gu_pair: 'gu', gu_cells: 'gu'} as Record<string, 'dong' | 'gu'>)[dataId] ?? null;
   const datasets = visState?.datasets;
   if (!level) return null;
   const key = level === 'dong' ? 'dong_code' : 'gu_code';

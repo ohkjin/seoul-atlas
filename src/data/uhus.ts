@@ -1,5 +1,5 @@
 import {processGeojson, processRowObject} from '@kepler.gl/processors';
-import {geoToH3} from 'h3-js';
+import {geoToH3, polyfill} from 'h3-js';
 import {SALES_GROUP_KEYS, VARIABLES, VAR_BY_KEY} from './catalog';
 
 const DONG_KEYS = VARIABLES.filter((x) => x.dataset === 'dong').map((x) => x.key);
@@ -28,6 +28,10 @@ export type UhusData = {
   dong: ReturnType<typeof processGeojson>;
   gu: ReturnType<typeof processGeojson>;      // dong variables rolled up per district
   guDaily: ReturnType<typeof processRowObject>;
+  // the areas as small H3 cells, each with its dong's (or its district's) static values —
+  // the 3D map's stipple of hexagons (cellsOf)
+  dongCells: {fields: any[]; rows: any[][]};
+  guCells: {fields: any[]; rows: any[][]};
   gus: Place[];
   dongs: Place[];
 };
@@ -134,6 +138,44 @@ export async function loadDongDaily(dongs: Place[]) {
   return withDisplayNames({fields, rows});
 }
 
+// The areas as H3 cells, for the 3D map seen from afar: every dong filled with
+// resolution-8 hexagons (edge ~460 m, ~0.7 km²; about a thousand over Seoul), each carrying
+// its dong's static values — and, in a second table over the same cells, its district's.
+// kepler's own H3 layer lays them flat, a little apart, as a hex grid. Resolution 9 (edge
+// ~170 m, 8,280 cells) came out needlessly dense: at the zooms the grid is shown, a cell
+// was one or two pixels. A cell belongs to one dong only; a dong too small to hold a cell
+// of its own gets the one at its centre, if no other dong has it.
+export const CELL_RES = 8;
+function cellsOf(dongGeom: DongGeom[], dongProps: Record<string, any>[], guProps: Record<string, Record<string, any>>) {
+  const valuesOf = new Map(dongProps.map((p) => [String(p.dong_code), p]));
+  const base = [
+    {name: 'h3', type: 'h3', format: '', analyzerType: 'H3'},
+    {name: 'gu_name', type: 'string', format: '', analyzerType: 'STRING'},
+    {name: 'gu_code', type: 'string', format: '', analyzerType: 'STRING'},
+  ];
+  const real = (name: string) => ({name, type: 'real', format: '', analyzerType: 'FLOAT'});
+  const dongFields = [...base, {name: 'dong_name', type: 'string', format: '', analyzerType: 'STRING'},
+    {name: 'dong_code', type: 'string', format: '', analyzerType: 'STRING'}, ...DONG_KEYS.map(real)];
+  const guFields = [...base, ...DONG_KEYS.map(real)];
+  const dongRows: any[][] = [], guRows: any[][] = [];
+  const taken = new Set<string>();
+  for (const d of dongGeom) {
+    const polys = d.geometry.type === 'Polygon' ? [d.geometry.coordinates] : d.geometry.coordinates;
+    const cells = new Set(polys.flatMap((poly) => polyfill(poly as any, CELL_RES, true)).filter((h) => !taken.has(h)));
+    if (!cells.size) {
+      const h = geoToH3(d.centroid[1], d.centroid[0], CELL_RES);
+      if (!taken.has(h)) cells.add(h);
+    }
+    cells.forEach((h) => taken.add(h));
+    const v = valuesOf.get(d.dong_code) ?? {}, g = guProps[d.gu_code] ?? {};
+    for (const h of cells) {
+      dongRows.push([h, d.gu_name, d.gu_code, d.dong_name, d.dong_code, ...DONG_KEYS.map((k) => v[k] ?? null)]);
+      guRows.push([h, d.gu_name, d.gu_code, ...DONG_KEYS.map((k) => g[k] ?? null)]);
+    }
+  }
+  return {dongCells: withDisplayNames({fields: dongFields, rows: dongRows}), guCells: withDisplayNames({fields: guFields, rows: guRows})};
+}
+
 export async function loadUhus(): Promise<UhusData> {
   const [dongGeom, dongMetrics, guGeom, guDaily, guGroups] = await Promise.all([
     fetchJson<DongGeom[]>('dong_geometry.json'),
@@ -194,8 +236,12 @@ export async function loadUhus(): Promise<UhusData> {
     }
   }
 
+  const {dongCells, guCells} = cellsOf(dongGeom, dongFc.features.map((f: any) => f.properties),
+    Object.fromEntries(guFc.features.map((f: any) => [f.properties.gu_code, f.properties])));
+
   return {
     holidays: new Set(guDaily.holidays ?? []),
+    dongCells, guCells,
     dong: withDisplayNames(keepAsText(processGeojson(dongFc as any) as any, ['gu_code', 'dong_code'])),
     gu: withDisplayNames(keepAsText(processGeojson(guFc as any) as any, ['gu_code'])),
     guDaily: withDisplayNames(keepAsH3(keepAsReal(keepAsText(processRowObject(guRows) as any, ['gu_code']),

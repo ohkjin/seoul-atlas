@@ -7,7 +7,7 @@ const accent = '#e8a35c', accentHover = '#f0b779', onAccent = '#16191e';
 const line = 'rgba(255, 255, 255, 0.08)';
 const fill = 'rgba(255, 255, 255, 0.06)', fillHover = 'rgba(255, 255, 255, 0.1)';
 const focusRing = 'rgba(232, 163, 92, 0.6)';
-const font = "'Inter Variable', Inter, Pretendard, system-ui, sans-serif";
+const font = "'Manrope Variable', Manrope, Pretendard, system-ui, sans-serif";   // the overlay's --sans
 
 export const keplerTheme = {
   fontFamily: font, btnFontFamily: font,
@@ -68,5 +68,10 @@ export const keplerTheme = {
   dropdownListBgdLT: 'rgba(20, 23, 28, 0.97)', dropdownListHighlightBgLT: fillHover, dropdownListBorderTopLT: line,
   checkboxBorderColorLT: ink3, scrollbarThumbColorLT: 'rgba(255, 255, 255, 0.16)', scrollbarThumbColorHoverLT: 'rgba(255, 255, 255, 0.34)',
   selectionBtnColor: ink2, selectionBtnBorderColor: line, selectionBtnActColor: accent, selectionBtnBorderActColor: accent,
-  selectionBtnBgdHover: fillHover
+  selectionBtnBgdHover: fillHover,
+
+  // kepler's playback widget (Time, larger): glass from styles.css, our ink and amber
+  bottomWidgetBgd: 'transparent', bottomInnerPdSide: 20, bottomInnerPdVert: 8, bottomPanelGap: 0,
+  rangeBrushBgd: 'rgba(255, 255, 255, 0.1)', histogramFillInRange: accent, histogramFillOutRange: 'rgba(255, 255, 255, 0.14)',
+  axisFontColor: ink3, timeTitleFontSize: '11px'
 };
