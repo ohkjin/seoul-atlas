@@ -11,6 +11,7 @@ const pending = new Map<string, Promise<void>>();
 
 export const isIndustry = (key: string) => !!VAR_BY_KEY[key]?.industry;
 export const industryLoaded = (key: string) => loaded.has(key);
+export const loadedIndustries = () => [...loaded.keys()];
 
 export function loadIndustries(keys: string[]): Promise<void> {
   return Promise.all(keys.filter((k) => isIndustry(k) && !loaded.has(k)).map((k) => {

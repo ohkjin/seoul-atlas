@@ -6,7 +6,7 @@ import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
-import {dailyBase, isIndustry, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
+import {dailyBase, isIndustry, loadIndustries, loadedIndustries, setDailyBase, withIndustries} from '../data/industries';
 import {useKepler} from './useKepler';
 import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
 import {adaptElevation, drawSelection, layersOnMap, planFor, restylePair, setCellView, sync3d, syncOrder, toggleLink, withMain,
@@ -58,24 +58,38 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // An industry's sales are not on the daily tables until first shown: its file loads, its
   // column joins them (refreshDailyTables), and only then does it go on the map — a layer
   // never points at a column that is not there yet.
-  const [industryLoading, setIndustryLoading] = useState<string | null>(null);
-  // an industry is on the daily tables once its column is (its file may have loaded
-  // earlier without one: the dashboard's sales panel reads files on its own)
-  const onTables = (key: string) => !!store.getState().keplerGl.map?.visState.datasets?.gu_daily?.fields.some((f: any) => f.name === key);
+  // per slot, the industry loading for it
+  const [industryLoading, setIndustryLoading] = useState<{main?: string; link?: string}>({});
+  // an industry is on the daily tables once its column is on each of them that is there (its
+  // file may have loaded earlier without one: the dashboard's sales panel reads files on its own)
+  const onTables = (key: string) => {
+    const sets = store.getState().keplerGl.map?.visState.datasets;
+    return !!sets?.gu_daily && ['gu_daily', 'dong_daily'].every((id) => !sets[id] || sets[id].fields.some((f: any) => f.name === key));
+  };
+  // resolves once the column is there — a rebuild lands a task later (replaceDataInMap)
+  const columnIn = (key: string) => new Promise<void>((done) => {
+    if (onTables(key)) return done();
+    const stop = store.subscribe(() => { if (onTables(key)) { stop(); done(); } });
+  });
+  // Per slot, only the latest pick counts: an industry still loading when something else is
+  // picked for the main (or the link) is not put there when it arrives, and does not clear
+  // the newer one's spinner. A main and a link picked together both land.
+  const latestPick = useRef({main: 0, link: 0});
   // as the main (the drawer's map button, a search hit) or linked to it (🔗)
   const select = (key: string, as: 'main' | 'link' = 'link') => {
     const next = as === 'main' ? withMain : toggleLink;
+    const pick = ++latestPick.current[as];
+    const current = () => pick === latestPick.current[as];
     if (isIndustry(key) && !onTables(key)) {
-      setIndustryLoading(key);
+      setIndustryLoading((l) => ({...l, [as]: key}));
       loadIndustries([key])
-        .then(() => {
-          refreshDailyTables();
-          setSelection((s) => next(s, key));
-        })
+        .then(() => { refreshDailyTables(); return columnIn(key); })
+        .then(() => { if (current()) setSelection((s) => next(s, key)); })
         .catch((e) => console.error('industry sales failed to load', e))
-        .finally(() => setIndustryLoading(null));
+        .finally(() => { if (current()) setIndustryLoading((l) => ({...l, [as]: undefined})); });
       return;
     }
+    setIndustryLoading((l) => ({...l, [as]: undefined}));
     setSelection((s) => next(s, key));
   };
   // Rebuilds the daily tables with every industry loaded so far, keeping the layers and
@@ -85,13 +99,18 @@ export default function Overlay({data}: {data: UhusData | null}) {
     for (const [id, level, label] of [['gu_daily', 'gu', 'Gu · daily'], ['dong_daily', 'dong', 'Dong · daily']] as const) {
       const base = dailyBase(level);
       if (!sets[id] || !base) continue;
+      if (loadedIndustries().every((k) => sets[id].fields.some((f: any) => f.name === k))) continue;
       const table = withIndustries(base, level);
-      if (table.fields.every((f) => sets[id].fields.some((g: any) => g.name === f.name))) continue;
       dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info: {id, label}, data: table} as any,
         options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
     }
   };
   useEffect(() => { if (data?.guDaily) setDailyBase('gu', data.guDaily as any); }, [data]);
+  // A rebuild asked for while another was in flight finds the table swapped out and skips it,
+  // so the one that lands may lack a column: whenever a daily table changes, put back any
+  // loaded industry it lacks (a no-op when none is missing).
+  const dailyFields = ['gu_daily', 'dong_daily'].map((id) => visState?.datasets?.[id]?.fields.length ?? 0).join();
+  useEffect(() => { refreshDailyTables(); }, [dailyFields]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [linked, setLinked] = useState(true);
   // the atlas's own filters: a value range per selected variable (ourFilters.ts)
   const [ranges, setRanges] = useState<Ranges>({});
@@ -424,7 +443,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
         <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} onExpand={expandTime} />
       )}
       {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select}
-        loading={industryLoading} />}
+        loading={Object.values(industryLoading).filter(Boolean) as string[]} />}
       {ready && dashboardOpen && !sandbox && (
         <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
           onSelect={select} onClose={() => setDashboardOpen(false)}

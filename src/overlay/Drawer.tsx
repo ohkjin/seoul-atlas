@@ -18,7 +18,7 @@ type Props = {
   setHeadline: (theme: ThemeKey, key: string) => void;
   selection: string[];
   onSelect: (key: string, as: 'main' | 'link') => void;
-  loading?: string | null;   // an industry whose sales are loading before it goes on the map
+  loading?: string[];   // industries whose sales are loading before they go on the map
 };
 
 // The bottom drawer. Closed, it is six floating theme cards. Open, a sheet rises from
@@ -89,7 +89,7 @@ export default function Drawer({focus, grain, headline, setHeadline, selection, 
   const row = (theme: ThemeKey, x: Variable, fold: React.ReactNode, child = false) => {
     const isMain = selection[0] === x.key;
     const linked = selection[1] === x.key;
-    const busy = loading === x.key;
+    const busy = !!loading?.includes(x.key);
     const replaces = !linked && selection.length >= MAX_SELECTED ? VAR_BY_KEY[selection[1]]?.short : null;
     const tip = busy ? 'Loading its sales…' : linked ? `Unlink from ${main}`
       : replaces ? `Link to ${main} (replaces ${replaces})` : `Link to ${main}`;

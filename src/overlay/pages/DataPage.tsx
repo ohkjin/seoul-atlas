@@ -70,7 +70,7 @@ function Card({s, selection, onPick}: {s: DataSource; selection: string[]; onPic
               const on = selection.includes(k);
               return (
                 <span key={k} className={`ds-chip${on ? ' on' : ''}`}>
-                  <button onClick={() => onPick(k)} title={on ? 'Linked to the map — click to unlink' : 'Link to the map'}>
+                  <button onClick={() => onPick(k)} title={selection[0] === k ? 'On the map, as the main' : on ? 'Linked to the map — click to unlink' : 'Link to the map'}>
                     <Link2 size={12} strokeWidth={1.8} />{x.short}
                   </button>
                   <InfoTip x={x} />

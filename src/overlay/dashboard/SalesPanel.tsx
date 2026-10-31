@@ -57,8 +57,8 @@ function Year({W, vals, hot, mild, y0, h, name, change, big, marked, today}: {W:
       <line className="sp-base" x1={0} x2={W} y1={y0 + h} y2={y0 + h} />
       <polyline className="sp-day" points={line(vals)} />
       <polyline className={`sp-week${big ? ' big' : ''}`} points={line(week)} />
-      {big && <line className="sp-mean mild" x1={0} x2={W} y1={Y(mean(mild))} y2={Y(mean(mild))} />}
-      {big && <line className="sp-mean hot" x1={0} x2={W} y1={Y(mean(hot))} y2={Y(mean(hot))} />}
+      {big && [['mild', mean(mild)], ['hot', mean(hot)]].map(([k, m]) => Number.isFinite(m)
+        ? <line key={k} className={`sp-mean ${k}`} x1={0} x2={W} y1={Y(m as number)} y2={Y(m as number)} /> : null)}
       {today != null && today >= 0 && today < n && <line className="sp-today" x1={X(today)} x2={X(today)} y1={y0} y2={y0 + h} />}
       <text className={`sp-name${big ? ' big' : ''}${marked ? ' marked' : ''}`} x={0} y={y0 + 11}>{name}</text>
       {change !== undefined && <text className={`sp-chg ${tone(change)}`} x={W} y={y0 + 11} textAnchor="end">{pct(change)}</text>}
