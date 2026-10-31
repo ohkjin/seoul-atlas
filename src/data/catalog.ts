@@ -21,6 +21,13 @@ export type Variable = {
   source: string;
   how: 'mean' | 'sum';      // how a gu / Seoul value is built from finer rows
   signed?: boolean;         // diverging colour ramp (negative ↔ positive)
+  // the folder it sits in, under another variable of its theme: an industry under its
+  // sector's sales, a SHAP contribution under RHSI
+  parent?: string;
+  // one of the 84 industries of card sales: its column is loaded on demand (industries.ts)
+  industry?: boolean;
+  // a sum of other variables, worked out per neighbourhood when the data loads (uhus.ts)
+  sumOf?: string[];
 };
 
 export const THEMES: {key: ThemeKey; label: string}[] = [
@@ -72,20 +79,103 @@ export const VARIABLES: Variable[] = [
   v('everyday_retail_share_all', 'economy', 'dong', 'Everyday retail', 'Everyday retail share among all sectors', 'ratio', 'Seoul AI Foundation'),
   v('general_share_all', 'economy', 'dong', 'General retail', 'General retail share among all sectors', 'ratio', 'Seoul AI Foundation'),
   v('large_format_share_all', 'economy', 'dong', 'Large format', 'Large-format retail share among all sectors', 'ratio', 'Seoul AI Foundation'),
+  // the same four shares within retail alone (UHUS Urban_Features)
+  v('dinebev_share_retail', 'economy', 'dong', 'Dining share (retail)', 'Dining & beverage share within retail', 'ratio', 'Seoul AI Foundation'),
+  v('everyday_retail_share_retail', 'economy', 'dong', 'Everyday retail (retail)', 'Everyday retail share within retail', 'ratio', 'Seoul AI Foundation'),
+  v('general_share_retail', 'economy', 'dong', 'General retail (retail)', 'General retail share within retail', 'ratio', 'Seoul AI Foundation'),
+  v('large_format_share_retail', 'economy', 'dong', 'Large format (retail)', 'Large-format retail share within retail', 'ratio', 'Seoul AI Foundation'),
 
   v('subway_access_coverage', 'mobility', 'dong', 'Subway access', 'Spatial accessibility to subway stations', 'ratio', 'Seoul Metro'),
   v('bus_stop_density', 'mobility', 'dong', 'Bus stops', 'Density of bus stops', 'per km²', 'Seoul Open Data Portal'),
   v('parking_capacity', 'mobility', 'dong', 'Parking', 'Parking infrastructure intensity', 'per km²', 'Seoul Open Data Portal'),
   v('delta_daypop', 'mobility', 'dong', 'Heat pop. shift', 'Daytime-population response, hot vs mild days', 'log-ratio', 'Seoul Open Data Portal', 'mean', true),
 
-  v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true),
-  v('shap_delta_daypop', 'insights', 'dong', 'SHAP · pop. shift', 'SHAP contribution of daytime-population response to RHSI', 'SHAP', 'UHUS model', 'mean', true),
-  v('shap_dnpr', 'insights', 'dong', 'SHAP · day/night', 'SHAP contribution of day/night population ratio to RHSI', 'SHAP', 'UHUS model', 'mean', true),
-  v('shap_land_price', 'insights', 'dong', 'SHAP · land price', 'SHAP contribution of land price to RHSI', 'SHAP', 'UHUS model', 'mean', true)
+  v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true)
 ];
+
+// What explains RHSI: the UHUS model's SHAP contribution of each of its 25 inputs, per
+// neighbourhood (UHUS shap_result) — the model's RHSI is a base value plus the 25 of them.
+// They sit in six folders by kind of input; each folder's head is the group's summed
+// contribution, a variable of its own (the same groups as the dashboard's SHAP panel).
+export const SHAP_GROUPS: {key: string; label: string; inputs: string[]}[] = [
+  {key: 'shap_g_sales', label: 'Sales mix', inputs: ['dinebev_share_all', 'everyday_retail_share_all', 'general_share_all',
+    'large_format_share_all', 'dinebev_share_retail', 'everyday_retail_share_retail', 'general_share_retail',
+    'large_format_share_retail', 'retail_share']},
+  {key: 'shap_g_people', label: 'People', inputs: ['elderly_share', 'low_income_share', 'dnpr', 'delta_daypop']},
+  {key: 'shap_g_mobility', label: 'Mobility', inputs: ['subway_access_coverage', 'bus_stop_density', 'parking_capacity']},
+  {key: 'shap_g_landuse', label: 'Land use', inputs: ['residential_area_share', 'commercial_area_share', 'leisure_area_share',
+    'transportation_area_share', 'public_facility_area_share', 'green_space_share']},
+  {key: 'shap_g_built', label: 'Built form', inputs: ['activity_facility_density', 'aged_housing_share']},
+  {key: 'shap_g_price', label: 'Land price', inputs: ['land_price']}
+];
+const inputs = Object.fromEntries(VARIABLES.map((x) => [x.key, x]));
+for (const g of SHAP_GROUPS) {
+  VARIABLES.push({...v(g.key, 'insights', 'dong', `SHAP · ${g.label}`,
+    `Summed SHAP contribution of the ${g.inputs.length} ${g.label.toLowerCase()} inputs to RHSI`, 'SHAP', 'UHUS model',
+    'mean', true), sumOf: g.inputs.map((k) => `shap_${k}`)});
+  for (const k of g.inputs) {
+    VARIABLES.push({...v(`shap_${k}`, 'insights', 'dong', `SHAP · ${inputs[k].short}`,
+      `SHAP contribution of ${inputs[k].full.charAt(0).toLowerCase()}${inputs[k].full.slice(1)} to RHSI`,
+      'SHAP', 'UHUS model', 'mean', true), parent: g.key});
+  }
+}
+
+// Card sales by industry, per neighbourhood and day: the 84 industries of UHUS sales, each in
+// its sector's folder (the six sector totals above, the earlier atlas's grouping). Built per
+// industry by scripts/build-industries.mjs; a column loads the first time it is shown.
+export const INDUSTRIES: Record<string, [string, string][]> = {
+  sales_fnb: [['korean_cuisine', 'Korean food'], ['japanese_cuisine', 'Japanese food'], ['western_cuisine', 'Western food'],
+    ['chinese_cuisine', 'Chinese food'], ['bakery', 'Bakery'], ['cafe', 'Cafe'], ['fast_food', 'Fast food'],
+    ['other_food', 'Other food'], ['other_food_service', 'Other food service'], ['liquor_store', 'Liquor store']],
+  sales_retail: [['department_store', 'Department store'], ['supermarket_large_format', 'Hypermarket'],
+    ['discount_store', 'Discount store'], ['shopping_mall', 'Shopping mall'], ['chain_grocery', 'Chain grocery'],
+    ['independent_grocery', 'Local grocery'], ['convenience_store', 'Convenience store'],
+    ['general_merchandise_imported', 'General & imported goods'], ['fresh_produce_seafood', 'Produce & seafood'],
+    ['butcher_shop', 'Butcher'], ['home_appliances', 'Home appliances'], ['furniture', 'Furniture'],
+    ['other_distribution', 'Other distribution'], ['chain_store', 'Chain store'], ['brand_exclusive_store', 'Brand store'],
+    ['office_equipment_stationery', 'Office & stationery'], ['handmade_goods_store', 'Handmade goods'],
+    ['gift_certificate_lottery', 'Gift cards & lottery']],
+  sales_fashion: [['apparel', 'Apparel'], ['fashion_accessories', 'Fashion accessories'], ['watches_jewelry', 'Watches & jewelry'],
+    ['cosmetics', 'Cosmetics'], ['hair_salon', 'Hair salon'], ['beauty_service', 'Beauty service'], ['massage_spa', 'Massage & spa'],
+    ['sauna_bathhouse', 'Sauna'], ['laundry_dry_cleaner', 'Laundry'], ['door_to_door_mlm_sales', 'Door-to-door sales']],
+  sales_health: [['pharmacy', 'Pharmacy'], ['general_hospital', 'General hospital'], ['general_clinic', 'Clinic'],
+    ['dental_clinic', 'Dentist'], ['korean_medicine_clinic', 'Korean medicine'], ['public_health_center', 'Public health center'],
+    ['other_medical', 'Other medical'], ['veterinary_clinic', 'Veterinary'], ['academy_learning_materials', 'Academies'],
+    ['school_tuition', 'School tuition'], ['study_room', 'Study room'], ['kindergarten', 'Kindergarten'], ['books', 'Books'],
+    ['bookstore', 'Bookstore'], ['cultural_goods', 'Cultural goods'], ['movie_performance', 'Movies & shows'],
+    ['instruments_records', 'Music & records'], ['computer_software', 'Computers & software']],
+  sales_leisure: [['gym', 'Gym'], ['sports_facility', 'Sports facility'], ['sports_leisure_goods', 'Sports goods'],
+    ['indoor_outdoor_golf', 'Golf'], ['leisure_town_amusement_park', 'Amusement park'], ['game_room_arcade', 'Arcade'],
+    ['karaoke', 'Karaoke'], ['entertainment_venue', 'Nightlife'], ['motel_inn_other_lodging', 'Motel & inn'],
+    ['hotel_condo', 'Hotel & condo'], ['gas_station', 'Gas station'], ['parking_lot', 'Parking lot'],
+    ['auto_service', 'Auto service'], ['auto_accessories', 'Auto parts'], ['used_car_dealer', 'Used cars'],
+    ['motorcycle', 'Motorcycles'], ['toys_kids_bicycles', 'Toys & bicycles'], ['lpg_gas', 'LPG gas']],
+  sales_housing: [['real_estate_agency', 'Real estate agency'], ['interior_building_materials_kitchenware', 'Interior & kitchen'],
+    ['legal_office_service', 'Legal services'], ['accounting_patent_service', 'Accounting & patents'],
+    ['research_translation_service', 'Research & translation'], ['wedding_hall_service', 'Wedding hall'],
+    ['funeral_home_cemetery', 'Funeral & cemetery'], ['pet_shop', 'Pet shop'], ['flower_shop', 'Flower shop'],
+    ['used_goods_store', 'Secondhand goods']]
+};
+// each industry right after its sector's total, so a folder follows its head
+for (const [sector, list] of Object.entries(INDUSTRIES)) {
+  const at = VARIABLES.findIndex((x) => x.key === sector);
+  VARIABLES.splice(at + 1, 0, ...list.map(([id, label]) => ({
+    ...v(`${id}_amount`, 'economy', 'dong_daily', `${label} (daily)`, `Daily card sales — ${label}`, 'KRW',
+      'Seoul AI Foundation, 2024 daily', 'sum'),
+    parent: sector, industry: true})));
+}
 
 export const VAR_BY_KEY = Object.fromEntries(VARIABLES.map((x) => [x.key, x])) as Record<string, Variable>;
 export const varsOf = (theme: ThemeKey) => VARIABLES.filter((x) => x.theme === theme);
+// a folder's contents, and a theme's variables outside any folder: those standing alone
+// first, then the folder heads
+export const childrenOf = (key: string) => VARIABLES.filter((x) => x.parent === key);
+const heads = new Set(VARIABLES.filter((x) => x.parent).map((x) => x.parent));
+export const topVarsOf = (theme: ThemeKey) => {
+  const top = varsOf(theme).filter((x) => !x.parent);
+  return [...top.filter((x) => !heads.has(x.key)), ...top.filter((x) => heads.has(x.key))];
+};
+export const INDUSTRY_KEYS = VARIABLES.filter((x) => x.industry).map((x) => x.key);
 export const isTemporal = (x: Variable) => x.dataset !== 'dong';
 // The six industry groups, in the order of the g arrays in *_group_daily.json.
 export const SALES_GROUP_KEYS = ['sales_fnb', 'sales_retail', 'sales_fashion', 'sales_health', 'sales_leisure', 'sales_housing'];

@@ -1,0 +1,137 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Mockup v2: the selected sales line's own year on top, always; under it the breakdown
+     (total: the six sectors; a sector: its industries), three ways to show the heat change.
+     Before: sales-time.html (bars, judged unreadable).
+     Left: the year of daily card sales for the focused place, one small timeline per sector
+     (an industry picked: that industry alone, larger), heat days shaded red.
+     Right: every industry's change on heat days against mild days as bars, with Seoul's
+     median as a tick. Two layouts (side by side, stacked) and the industry-picked state.
+     Real values: UHUS sales + Daily_Weather, Yeoksam 1(il)-dong. -->
+<style>
+  body { margin: 0; background: #0b0d11; color: #eef2f7; font-family: Inter, system-ui, sans-serif; padding: 24px; }
+  .opt { font: 600 13px Inter; color: #e8a35c; margin: 26px 0 8px; letter-spacing: .04em; }
+  .opt:first-child { margin-top: 0; } .opt span { color: #a9b2bf; font-weight: 400; margin-left: 8px; }
+  .panel { width: 980px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 16px 14px; box-sizing: border-box; }
+  h3 { margin: 0 0 4px; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #6f7886; }
+  .sum { font-size: 11.5px; color: #a9b2bf; margin-bottom: 8px; } .sum b { color: #eef2f7; }
+  .legend { display: flex; gap: 18px; align-items: center; font-size: 10.5px; color: #a9b2bf; margin-top: 8px; flex-wrap: wrap; }
+  .k { display: inline-block; width: 12px; height: 10px; vertical-align: -1px; margin-right: 5px; border-radius: 2px; }
+  text { font-family: Inter, system-ui, sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+</style>
+<body>
+<div class="opt">A · numbers on the lines <span>each small year carries its own heat-day change, worst first</span></div>
+<div class="panel"><h3>Sales — the year, and the heat</h3><svg id="A" width="948"></svg><div class="legend lg"></div></div>
+<div class="opt">B · two bars, mild vs heat <span>beside each small year: what a mild day sells, what a heat day sells</span></div>
+<div class="panel"><h3>Sales — the year, and the heat</h3><svg id="B" width="948"></svg><div class="legend lg"></div></div>
+<div class="opt">C · in words <span>the small years plain; at the right, what fell and what rose, in a sentence each</span></div>
+<div class="panel"><h3>Sales — the year, and the heat</h3><svg id="C" width="948"></svg><div class="legend lg"></div></div>
+<script>
+const SECTORS = [
+  ['F&B', ['korean_cuisine','Korean food'],['japanese_cuisine','Japanese food'],['western_cuisine','Western food'],['chinese_cuisine','Chinese food'],['bakery','Bakery'],['cafe','Cafe'],['fast_food','Fast food'],['other_food','Other food'],['other_food_service','Other food service'],['liquor_store','Liquor store']],
+  ['Retail & goods', ['department_store','Department store'],['supermarket_large_format','Hypermarket'],['discount_store','Discount store'],['shopping_mall','Shopping mall'],['chain_grocery','Chain grocery'],['independent_grocery','Local grocery'],['convenience_store','Convenience store'],['general_merchandise_imported','General & imported goods'],['fresh_produce_seafood','Produce & seafood'],['butcher_shop','Butcher'],['home_appliances','Home appliances'],['furniture','Furniture'],['other_distribution','Other distribution'],['chain_store','Chain store'],['brand_exclusive_store','Brand store'],['office_equipment_stationery','Office & stationery'],['handmade_goods_store','Handmade goods'],['gift_certificate_lottery','Gift cards & lottery']],
+  ['Fashion & beauty', ['apparel','Apparel'],['fashion_accessories','Fashion accessories'],['watches_jewelry','Watches & jewelry'],['cosmetics','Cosmetics'],['hair_salon','Hair salon'],['beauty_service','Beauty service'],['massage_spa','Massage & spa'],['sauna_bathhouse','Sauna'],['laundry_dry_cleaner','Laundry'],['door_to_door_mlm_sales','Door-to-door sales']],
+  ['Health & culture', ['pharmacy','Pharmacy'],['general_hospital','General hospital'],['general_clinic','Clinic'],['dental_clinic','Dentist'],['korean_medicine_clinic','Korean medicine'],['public_health_center','Public health center'],['other_medical','Other medical'],['veterinary_clinic','Veterinary'],['academy_learning_materials','Academies'],['school_tuition','School tuition'],['study_room','Study room'],['kindergarten','Kindergarten'],['books','Books'],['bookstore','Bookstore'],['cultural_goods','Cultural goods'],['movie_performance','Movies & shows'],['instruments_records','Music & records'],['computer_software','Computers & software']],
+  ['Leisure & travel', ['gym','Gym'],['sports_facility','Sports facility'],['sports_leisure_goods','Sports goods'],['indoor_outdoor_golf','Golf'],['leisure_town_amusement_park','Amusement park'],['game_room_arcade','Arcade'],['karaoke','Karaoke'],['entertainment_venue','Nightlife'],['motel_inn_other_lodging','Motel & inn'],['hotel_condo','Hotel & condo'],['gas_station','Gas station'],['parking_lot','Parking lot'],['auto_service','Auto service'],['auto_accessories','Auto parts'],['used_car_dealer','Used cars'],['motorcycle','Motorcycles'],['toys_kids_bicycles','Toys & bicycles'],['lpg_gas','LPG gas']],
+  ['Housing & services', ['real_estate_agency','Real estate agency'],['interior_building_materials_kitchenware','Interior & kitchen'],['legal_office_service','Legal services'],['accounting_patent_service','Accounting & patents'],['research_translation_service','Research & translation'],['wedding_hall_service','Wedding hall'],['funeral_home_cemetery','Funeral & cemetery'],['pet_shop','Pet shop'],['flower_shop','Flower shop'],['used_goods_store','Secondhand goods']]
+];
+const C = {fg: '#eef2f7', mid: '#a9b2bf', dim: '#6f7886', hot: '#e0484e', mild: '#3b6fd1', ring: '#e8a35c', line: '#d9dee6'};
+const MIN_DAILY = 100000, LIM = Math.log(2);
+Promise.all(['sales-time.json', 'sales-swarm.json'].map(f => fetch(f).then(r => r.json()))).then(([T, S]) => {
+  const N = T.dates.length, label = Object.fromEntries(SECTORS.flatMap(([, ...k]) => k));
+  const series = keys => T.dates.map((_, i) => keys.reduce((s, k) => s + T.series[`${k}_amount`][i], 0));
+  const mean = (v, m) => { let s = 0, n = 0; v.forEach((x, i) => { if (m[i]) { s += x; n++; } }); return n ? s / n : NaN; };
+  const lrOf = v => { const h = mean(v, T.hot), m = mean(v, T.mild); return h > 0 && m >= MIN_DAILY ? Math.log(h / m) : NaN; };
+  const pct = v => Number.isFinite(v) ? `${v >= 0 ? '+' : '−'}${Math.abs((Math.exp(v) - 1) * 100).toFixed(0)}%` : '—';
+  const won = v => v >= 1e9 ? `₩${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `₩${(v / 1e6).toFixed(1)}M` : `₩${Math.round(v / 1e3)}k`;
+  // Seoul's median change per industry (and sector), from every dong's hot/mild means
+  const si = Object.fromEntries(S.ind.map((k, i) => [k.replace(/_amount$/, ''), i]));
+  const seoulMed = keys => { const ids = keys.map(k => si[k]); const v = S.rows.map(r => { const h = ids.reduce((s, i) => s + r.hot[i], 0), m = ids.reduce((s, i) => s + r.mild[i], 0); return h > 0 && m >= MIN_DAILY ? Math.log(h / m) : NaN; }).filter(Number.isFinite).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : NaN; };
+  const roll = v => v.map((_, i) => { let s = 0, n = 0; for (let j = i - 3; j <= i + 3; j++) if (j >= 0 && j < N) { s += v[j]; n++; } return s / n; });
+  const sectors = SECTORS.map(([name, ...kids]) => { const keys = kids.map(([k]) => k), v = series(keys); return {name, keys, v, lr: lrOf(v), med: seoulMed(keys),
+    kids: kids.map(([k, l]) => { const kv = series([k]); return {key: k, label: l, v: kv, lr: lrOf(kv), med: seoulMed([k]), avg: kv.reduce((a, b) => a + b, 0) / N}; }).sort((a, b) => (Number.isFinite(a.lr) ? a.lr : 9) - (Number.isFinite(b.lr) ? b.lr : 9))}; });
+  const allKeys = sectors.flatMap(s => s.keys), allV = series(allKeys);
+
+  // one timeline: the daily line faint, its 7-day mean over it, heat days as red columns,
+  // mild days as blue ticks under it, the month letters along the foot
+  function timeline(v, x0, y0, w, h, {big = false, name = '', change = NaN, axis = false, chip = true} = {}) {
+    const X = i => x0 + i / (N - 1) * w, q = [...v].sort((a, b) => a - b), lo = q[Math.floor(N * 0.02)], hi = q[Math.floor(N * 0.98)] || 1;
+    // the 2nd–98th percentile of the days fills the row (a few spikes clip), under the label
+    const Y = x => y0 + h - 4 - (Math.max(lo, Math.min(hi, x)) - lo) / (hi - lo || 1) * (h - 20);
+    let o = '';
+    T.hot.forEach((b, i) => { if (b) o += `<rect x="${(X(i) - w / N / 2).toFixed(1)}" y="${y0}" width="${Math.max(1.4, w / N).toFixed(1)}" height="${h}" fill="${C.hot}" fill-opacity="0.22"/>`; });
+    T.mild.forEach((b, i) => { if (b) o += `<rect x="${X(i).toFixed(1)}" y="${y0 + h - 2}" width="1.4" height="2" fill="${C.mild}"/>`; });
+    o += `<line x1="${x0}" x2="${x0 + w}" y1="${y0 + h}" y2="${y0 + h}" stroke="rgba(255,255,255,0.08)"/>`;
+    o += `<polyline points="${v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(' ')}" fill="none" stroke="${C.line}" stroke-opacity="${big ? 0.28 : 0.18}" stroke-width="0.8"/>`;
+    o += `<polyline points="${roll(v).map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(' ')}" fill="none" stroke="${C.line}" stroke-width="${big ? 1.8 : 1.3}"/>`;
+    if (big) {
+      const hm = mean(v, T.hot), mm = mean(v, T.mild);
+      // the two means as dashed lines (their values are in the readout beside)
+      o += `<line x1="${x0}" x2="${x0 + w}" y1="${Y(mm)}" y2="${Y(mm)}" stroke="${C.mild}" stroke-dasharray="4 3"/><line x1="${x0}" x2="${x0 + w}" y1="${Y(hm)}" y2="${Y(hm)}" stroke="${C.hot}" stroke-dasharray="4 3"/>`;
+    }
+    if (name) o += `<text x="${x0}" y="${y0 + 11}" font-size="${big ? 12.5 : 11.5}" fill="${big ? C.fg : C.mid}">${name}</text>`;
+    if (chip) o += `<text x="${x0 + w}" y="${y0 + 11}" text-anchor="end" font-size="10.5" class="mono" fill="${Number.isFinite(change) ? C.fg : C.dim}">${pct(change)} <tspan fill="${C.dim}">heat days</tspan></text>`;
+    if (axis) 'JFMAMJJASOND'.split('').forEach((m, k) => { const i = T.dates.findIndex(d => +d.slice(5, 7) === k + 1); o += `<text x="${X(i) + 2}" y="${y0 + h + 12}" font-size="9.5" fill="${C.dim}">${m}</text>`; });
+    return o;
+  }
+
+  const put = (id, svg, h) => { const e = document.getElementById(id); e.setAttribute('height', h); e.innerHTML = svg; };
+  const chg = v => (Math.exp(v) - 1) * 100;
+  const tone = v => !Number.isFinite(v) ? C.dim : v < 0 ? '#ef8a8e' : '#7fa3e6';
+
+  // the top: the line on the map, large, with its two means; at its right, the answer in words
+  function top(v, name, keys) {
+    const hm = mean(v, T.hot), mm = mean(v, T.mild), lr = lrOf(v), med = seoulMed(keys);
+    let o = timeline(v, 0, 0, 640, 170, {big: true, name, axis: true, chip: false});
+    const x = 672;
+    o += `<text x="${x}" y="40" font-size="40" font-weight="500" fill="${tone(lr)}">${pct(lr)}</text>`;
+    o += `<text x="${x}" y="62" font-size="12" fill="${C.fg}">${name} on a heat day</text><text x="${x}" y="78" font-size="12" fill="${C.fg}">against a mild day, here</text>`;
+    o += `<line x1="${x}" x2="${x + 16}" y1="102" y2="102" stroke="${C.hot}" stroke-dasharray="4 3"/><text x="${x + 22}" y="106" font-size="11" fill="#ef8a8e">heat day ${won(hm)}</text><line x1="${x + 130}" x2="${x + 146}" y1="102" y2="102" stroke="${C.mild}" stroke-dasharray="4 3"/><text x="${x + 152}" y="106" font-size="11" fill="#7fa3e6">mild day ${won(mm)}</text>`;
+    o += `<text x="${x}" y="130" font-size="11" fill="${C.mid}">a typical Seoul neighborhood: <tspan fill="${tone(med)}">${pct(med)}</tspan></text>`;
+    o += `<text x="${x}" y="146" font-size="10.5" fill="${C.dim}">${T.hot.filter(Boolean).length} heat days · ${T.mild.filter(Boolean).length} mild days in 2024</text>`;
+    o += `<line x1="0" x2="948" y1="202" y2="202" stroke="rgba(255,255,255,0.08)"/><text x="0" y="222" font-size="10" letter-spacing="1.4" fill="${C.dim}">BY SECTOR</text>`;
+    return [o, 232];
+  }
+  const sorted = [...sectors].sort((a, b) => a.lr - b.lr);
+
+  // A: two columns of small years, each with its change, worst first
+  { let [o, y] = top(allV, 'All card sales', allKeys);
+    sorted.forEach((s, k) => { const c = k % 2, r = Math.floor(k / 2);
+      o += timeline(s.v, c * 484, y + r * 60, 464, 50, {name: s.name, change: s.lr, axis: r === 2}); });
+    put('A', o, y + 3 * 60 + 8); }
+
+  // B: one column of small years, and beside each the two daily means as bars on its own scale
+  { let [o, y] = top(allV, 'All card sales', allKeys);
+    for (const s of sorted) {
+      const hm = mean(s.v, T.hot), mm = mean(s.v, T.mild), mx = Math.max(hm, mm), bw = 120, x = 680;
+      o += timeline(s.v, 0, y, 640, 44, {name: s.name, chip: false, axis: s === sorted[sorted.length - 1]});
+      o += `<rect x="${x}" y="${y + 12}" width="${mm / mx * bw}" height="9" rx="2" fill="${C.mild}"/><text x="${x + bw + 8}" y="${y + 20}" font-size="10" class="mono" fill="#7fa3e6">mild ${won(mm)}</text>`;
+      o += `<rect x="${x}" y="${y + 25}" width="${hm / mx * bw}" height="9" rx="2" fill="${C.hot}"/><text x="${x + bw + 8}" y="${y + 33}" font-size="10" class="mono" fill="#ef8a8e">heat ${won(hm)}</text>`;
+      o += `<text x="948" y="${y + 27}" text-anchor="end" font-size="11" class="mono" fill="${tone(s.lr)}">${pct(s.lr)}</text>`;
+      y += 52;
+    }
+    put('B', o, y + 14); }
+
+  // C: small years plain at the left, the story at the right
+  { let [o, y] = top(allV, 'All card sales', allKeys); const y0 = y;
+    sorted.forEach((s, k) => { o += timeline(s.v, 0, y, 560, 40, {name: s.name, chip: false, axis: k === sorted.length - 1}); y += 46; });
+    const kids = sectors.flatMap(s => s.kids).filter(k => Number.isFinite(k.lr));
+    const fell = [...kids].sort((a, b) => a.lr - b.lr).slice(0, 4), rose = [...kids].sort((a, b) => b.lr - a.lr).slice(0, 4);
+    let ty = y0 + 10; const x = 600;
+    const line = (t, fill = C.fg, size = 12) => { o += `<text x="${x}" y="${ty}" font-size="${size}" fill="${fill}">${t}</text>`; ty += size + 7; };
+    line('On heat days, here…', C.mid, 11);
+    line(`<tspan fill="#ef8a8e">${sorted[0].name}</tspan> fell most: ${pct(sorted[0].lr)}`);
+    line(`<tspan fill="${tone(sorted[sorted.length - 1].lr)}">${sorted[sorted.length - 1].name}</tspan> held: ${pct(sorted[sorted.length - 1].lr)}`);
+    ty += 8; line('Fell most', '#ef8a8e', 11);
+    fell.forEach(k => line(`${k.label}  <tspan class="mono" fill="#ef8a8e">${pct(k.lr)}</tspan>`, C.fg, 11.5));
+    ty += 8; line('Rose most', '#7fa3e6', 11);
+    rose.forEach(k => line(`${k.label}  <tspan class="mono" fill="#7fa3e6">${pct(k.lr)}</tspan>`, C.fg, 11.5));
+    put('C', o, Math.max(y + 14, ty)); }
+
+  const lg = `<span><i class="k" style="background:${C.hot};opacity:.45"></i>heat day (feels-like ≥ 33 °C)</span><span><i class="k" style="background:${C.mild};height:3px"></i>mild day</span><span>line: daily sales, bold 7-day mean</span><span><i class="k" style="height:0;border-top:1px dashed ${C.hot};width:14px"></i><i class="k" style="height:0;border-top:1px dashed ${C.mild};width:14px"></i>heat-day and mild-day averages</span>`;
+  document.querySelectorAll('.lg').forEach(e => e.innerHTML = lg);
+});
+</script>
+</body>

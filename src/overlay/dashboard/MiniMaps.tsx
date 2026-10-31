@@ -1,5 +1,5 @@
 import {useMemo} from 'react';
-import {dailyColorRange, isTemporal, paletteRange, varsOf, type Variable} from '../../data/catalog';
+import {dailyColorRange, isTemporal, paletteRange, topVarsOf, type Variable} from '../../data/catalog';
 import type {UhusData} from '../../data/uhus';
 import type {Grain} from '../layers';
 import {placeSeries} from '../scatter';
@@ -7,13 +7,14 @@ import type {DashCtx} from './Dashboard';
 
 const MW = 200, MH = 150;
 
-// Small multiples: every variable of the first linked variable's theme as a little map of
+// Small multiples: every variable of the first linked variable's theme outside a folder as a little map of
 // the same places, coloured by quantile in its map palette — a whole theme at a glance.
 // Daily ones show the playing day. Clicking a map links that variable (🔗).
 export default function MiniMaps({ctx}: {ctx: DashCtx}) {
   const {data, vars, grain, datasets, filters, day, selection, onSelect} = ctx;
   const theme = vars[0]?.theme ?? 'environment';
-  const themeVars = varsOf(theme);
+  // a folder head stands for its folder (a sector for its industries, RHSI for its SHAP)
+  const themeVars = topVarsOf(theme);
   const paths = usePaths(data, grain);
   // kepler hands out new dataset objects on every filter step; the values only change with
   // the day or when a dataset arrives, so those are what the memo watches

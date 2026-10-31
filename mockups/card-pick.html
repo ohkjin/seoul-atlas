@@ -1,0 +1,128 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Mockup: with the name now picking the map's main and the link icon the second, what picks
+     the number on a theme's card at the top of the drawer? Five ideas, one theme each. -->
+<style>
+  :root { --ink: #eef2f7; --ink-2: #c4cbd5; --ink-3: #6f7886; --ink-4: #4a515c; --accent: #e8a35c; --line: rgba(255,255,255,0.08); }
+  body { margin: 0; background: #0b0d11; color: var(--ink); font-family: Inter, system-ui, sans-serif; padding: 24px; width: 1120px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .opt { font: 600 13px Inter; color: var(--accent); margin: 0 0 4px; }
+  .how { font-size: 11.5px; color: #a9b2bf; margin: 0 0 10px; line-height: 1.55; min-height: 54px; } .how b { color: var(--ink); font-weight: 500; }
+  .sheet { background: rgba(22,25,31,0.94); border: 1px solid var(--line); border-radius: 16px; padding: 14px; position: relative; }
+  .card { position: relative; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 12px 14px; background: rgba(255,255,255,0.025); margin-bottom: 10px; }
+  .card.drop { border: 1px dashed rgba(232,163,92,0.8); background: rgba(232,163,92,0.06); }
+  .t { font-size: 10px; letter-spacing: .16em; color: #a9b2bf; }
+  .v { font-size: 22px; font-weight: 300; margin-top: 2px; } .s { font-size: 11px; color: var(--ink-3); }
+  .v.ghost, .s.ghost { color: var(--ink-3); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { position: relative; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 4px 0 8px; border-radius: 10px; }
+  .n { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li.main { background: rgba(232,163,92,0.10); } li.main .n, li.second .n, li.hover .n { color: var(--ink); }
+  li.main::before { content: ''; position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; border-radius: 2px; background: var(--accent); }
+  li.hover { background: rgba(255,255,255,0.05); }
+  .ic { width: 24px; height: 26px; display: grid; place-items: center; color: var(--ink-3); flex: none; border-radius: 7px; }
+  .ic.on { color: var(--accent); }
+  .push { margin-left: auto; }
+  .val { margin-left: auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; padding: 2px 6px; border-radius: 6px; }
+  .val.on { color: var(--accent); background: rgba(232,163,92,0.12); }
+  li.hover .val { color: var(--ink); background: rgba(255,255,255,0.08); }
+  .cursor { position: absolute; font-size: 15px; color: #fff; z-index: 3; }
+  .tip { position: absolute; font-size: 10.5px; background: #20242c; border: 1px solid var(--line); color: var(--ink-2); padding: 2px 7px; border-radius: 6px; white-space: nowrap; z-index: 2; }
+  .arrows { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
+  .arrows span { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--ink-2); background: rgba(255,255,255,0.06); font-size: 13px; }
+  .dots { display: flex; gap: 4px; margin-top: 7px; } .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--ink-4); } .dots i.on { background: var(--accent); }
+  .grip { color: var(--ink-3); font-size: 12px; letter-spacing: -2px; width: 10px; }
+  .drag { position: absolute; left: 30px; right: 30px; top: 96px; height: 32px; border-radius: 10px; background: #262b34; box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; align-items: center; padding: 0 10px; font-size: 13px; transform: rotate(-1.5deg); z-index: 2; }
+  .row-gap { opacity: 0.3; }
+  .tag { margin-left: 8px; font-size: 10px; color: var(--accent); }
+</style>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2"/><path d="M15 7h2a5 5 0 1 1 0 10h-2"/><line x1="8" x2="16" y1="12" y2="12"/></symbol>
+  <symbol id="cardo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><rect x="3.5" y="6" width="17" height="12" rx="2.5"/><line x1="7" y1="10.5" x2="12" y2="10.5" stroke-linecap="round"/></symbol>
+  <symbol id="cardf" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="2.5" fill="currentColor"/><line x1="7" y1="10.5" x2="12" y2="10.5" stroke="#16191e" stroke-width="1.75" stroke-linecap="round"/></symbol>
+</svg>
+
+<div class="grid">
+
+<!-- 1 -->
+<div>
+  <div class="opt">1 · A little card ▭</div>
+  <p class="how">Each row gets a tiny <b>card</b> icon next to the link. Filled = this is on the card above. Hover shows the empty ones; click one to put it there.</p>
+  <div class="sheet">
+    <div class="card"><div class="t">ENVIRONMENT</div><div class="v">6.68</div><div class="s">Max temperature (daily)</div></div>
+    <ul><li class="second"><span class="n">Max temperature (daily)</span><span class="ic on push"><svg width="16" height="16"><use href="#cardf"/></svg></span><span class="ic on"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li class="hover"><span class="n">Apparent max temp</span><span class="ic push"><svg width="16" height="16"><use href="#cardo"/></svg></span><span class="ic"><svg width="15" height="15"><use href="#link"/></svg></span><span class="cursor" style="right:42px;top:14px">↖</span><span class="tip" style="right:20px;top:32px">Show on the card</span></li>
+      <li><span class="n">Heat days</span><span class="ic push" style="visibility:hidden"></span><span class="ic"><svg width="15" height="15"><use href="#link"/></svg></span></li></ul>
+  </div>
+</div>
+
+<!-- 2 -->
+<div>
+  <div class="opt">2 · The number is the button</div>
+  <p class="how">Every row shows its <b>own value</b> at the right, faint. The one on the card is lit. Click a number and it goes up to the card — the card shows a number, so you pick a number.</p>
+  <div class="sheet">
+    <div class="card"><div class="t">ENVIRONMENT</div><div class="v">6.68</div><div class="s">Max temperature (daily)</div></div>
+    <ul><li class="second"><span class="n">Max temperature (daily)</span><span class="val on">6.68</span><span class="ic on"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li class="hover"><span class="n">Apparent max temp</span><span class="val">5.91</span><span class="ic"><svg width="15" height="15"><use href="#link"/></svg></span><span class="cursor" style="right:44px;top:14px">↖</span></li>
+      <li><span class="n">Heat days</span><span class="val">38</span><span class="ic"><svg width="15" height="15"><use href="#link"/></svg></span></li></ul>
+  </div>
+</div>
+
+<!-- 3 -->
+<div>
+  <div class="opt">3 · Flip the card ‹ ›</div>
+  <p class="how">The rows stay just names. The <b>card</b> has ‹ › on hover and dots for its variables; flip through them right there. What's on the card is picked on the card.</p>
+  <div class="sheet">
+    <div class="card"><div class="t">ENVIRONMENT</div><div class="v">5.91</div><div class="s">Apparent max temp (daily)</div><div class="dots"><i></i><i class="on"></i><i></i><i></i><i></i><i></i></div>
+      <div class="arrows"><span>‹</span><span>›</span></div><span class="cursor" style="right:6px;top:52px">↖</span></div>
+    <ul><li class="second"><span class="n">Max temperature (daily)</span><span class="ic on push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Apparent max temp</span><span class="tag">● on the card</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Heat days</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li></ul>
+  </div>
+</div>
+
+<!-- 4 -->
+<div>
+  <div class="opt">4 · Drag it up</div>
+  <p class="how">Pick a row up and <b>drop it on the card</b>; the card lights as a target. No icon at all — the move is the meaning. (Needs a hint the first time.)</p>
+  <div class="sheet">
+    <div class="card drop"><div class="t">ENVIRONMENT</div><div class="v ghost">—</div><div class="s" style="color:var(--accent)">Drop to show here</div></div>
+    <div class="drag"><span class="grip">⋮⋮</span>&nbsp;&nbsp;Heat days<span class="cursor" style="left:110px;top:12px">✥</span></div>
+    <ul><li class="second"><span class="n">Max temperature (daily)</span><span class="ic on push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Apparent max temp</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li class="row-gap"><span class="n">Heat days</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li></ul>
+  </div>
+</div>
+
+<!-- 5 -->
+<div>
+  <div class="opt">5 · Hover peeks, card follows the map</div>
+  <p class="how">No control. The card shows what this theme has on the map (else the last it had). <b>Hovering</b> a row previews its value on the card, so you can read any of them without picking.</p>
+  <div class="sheet">
+    <div class="card"><div class="t">ENVIRONMENT</div><div class="v">38</div><div class="s">Heat days <span style="color:var(--ink-4)">· preview</span></div></div>
+    <ul><li class="second"><span class="n">Max temperature (daily)</span><span class="ic on push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Apparent max temp</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li class="hover"><span class="n">Heat days</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span><span class="cursor" style="left:70px;top:14px">↖</span></li></ul>
+  </div>
+</div>
+
+<!-- 6 -->
+<div>
+  <div class="opt">6 · Card and row, one gesture</div>
+  <p class="how">Clicking the <b>card</b> itself opens its list right on it (a small menu of the theme's variables). The drawer rows only ever touch the map.</p>
+  <div class="sheet">
+    <div class="card"><div class="t">ENVIRONMENT</div><div class="v">6.68</div><div class="s">Max temperature (daily) ⌄</div>
+      <div style="position:absolute;left:14px;right:14px;top:78px;background:#14171c;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:5px;font-size:12px;z-index:2;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
+        <div style="padding:5px 7px;color:var(--accent)">✓ Max temperature (daily)</div>
+        <div style="padding:5px 7px;background:rgba(255,255,255,0.08);border-radius:6px">Apparent max temp</div>
+        <div style="padding:5px 7px;color:var(--ink-2)">Heat days</div></div></div>
+    <ul style="opacity:.45"><li class="second"><span class="n">Max temperature (daily)</span><span class="ic on push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Apparent max temp</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li>
+      <li><span class="n">Heat days</span><span class="ic push"><svg width="15" height="15"><use href="#link"/></svg></span></li></ul>
+  </div>
+</div>
+
+</div>
+</body>

@@ -185,6 +185,13 @@ export async function loadUhus(): Promise<UhusData> {
     fetchJson<GuGroupDaily>('gu_group_daily.json')   // small (0.9MB); the per-dong file loads on demand
   ]);
 
+  // the variables that are sums of others (the SHAP groups), per neighbourhood
+  for (const x of VARIABLES.filter((x) => x.sumOf)) {
+    for (const m of dongMetrics) {
+      const parts = x.sumOf!.map((k) => m[k]).filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+      m[x.key] = parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+    }
+  }
   const metricByCode = new Map(dongMetrics.map((m) => [m.dong_code, m]));
   const dongFc = {
     type: 'FeatureCollection',

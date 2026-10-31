@@ -7,14 +7,22 @@ import {OUTLINE_LAYER_ID} from './outline';
 import {PAIR_FIELD, addPair, cellMixedIdOf, cellPairConfig, cellPairIdOf, columnPairIdOf, dailyRaisedCellsConfig, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
   pairVisConfig} from './pair';
 
-// The selection is what the map is about: at most two variables, in the order they were
-// linked (🔗 in the drawer). Linking a third lets the first go, so the map always shows
-// the latest two. Two is what kepler can show side by side (its split map has exactly
-// two halves) and what one layer can carry readably (the bivariate grid, colour + height).
+// The selection is what the map is about: the main first — always exactly one, the colour,
+// what the dashboard follows (the drawer's map button) — then at most one more, linked to it (🔗).
+// Two is what kepler can show side by side (its split map has exactly two halves) and what
+// one layer can carry readably (the bivariate grid, colour + height).
 export const MAX_SELECTED = 2;
-export function nextSelection(selection: string[], key: string): string[] {
-  if (selection.includes(key)) return selection.filter((k) => k !== key);
-  return [...selection, key].slice(-MAX_SELECTED);
+// a new main replaces the old one and keeps the link; the linked one made main swaps with it
+export function withMain(selection: string[], key: string): string[] {
+  if (selection[0] === key) return selection;
+  return [key, ...(selection.includes(key) ? selection.slice(0, 1) : selection.slice(1))];
+}
+// link or unlink: a new link replaces the old one. Unlinking the main hands the lead to the
+// linked one; the last one stays, so the map is never without a main.
+export function toggleLink(selection: string[], key: string): string[] {
+  if (!selection.length) return [key];
+  if (selection[0] === key) return selection.length > 1 ? selection.slice(1) : selection;
+  return selection[1] === key ? selection.slice(0, 1) : [selection[0], key];
 }
 
 // Map detail: neighbourhood variables can be drawn per dong or rolled up per district —

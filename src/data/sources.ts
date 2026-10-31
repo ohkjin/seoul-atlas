@@ -1,6 +1,7 @@
 // The datasets behind the atlas, for the Data page: what each one is, where it comes
 // from, how the project made it, and which of the app's variables it supplies. Wording
 // follows the UHUS data schema (UHUS/Data_schema.csv) and the earlier Seoul Data Atlas.
+import {INDUSTRY_KEYS, VARIABLES} from './catalog';
 
 export type SourceKind = 'public' | 'project' | 'restricted';
 export type Link = {label: string; url: string};
@@ -43,13 +44,14 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'sales', role: 'Inputs', title: 'Sales Signal', file: 'sales.csv', kind: 'restricted',
-    description: 'Daily card-sales amounts across about 85 industries per neighbourhood — the behavioural signal behind ' +
+    description: 'Daily card-sales amounts across 84 industries per neighbourhood — the behavioural signal behind ' +
       'retail heat sensitivity. Provided to the project by the Seoul AI Foundation; not openly available.',
     how: 'Retail sales sum the 19 retail industries used for RHSI. The six themed totals group all industries into food & ' +
       'beverage; retail & daily goods; fashion & beauty; health, education & culture; leisure, mobility & lodging; and ' +
-      'housing, professional & local services.',
+      'housing, professional & local services. Each of the 84 industries can be mapped on its own, in its sector’s folder.',
     space: 'Dong · 422', time: 'Day · 366 (2024)', source: 'Seoul AI Foundation',
-    vars: ['retail_total_amount', 'sales_fnb', 'sales_retail', 'sales_fashion', 'sales_health', 'sales_leisure', 'sales_housing'],
+    vars: ['retail_total_amount', 'sales_fnb', 'sales_retail', 'sales_fashion', 'sales_health', 'sales_leisure', 'sales_housing',
+      ...INDUSTRY_KEYS],
   },
   {
     id: 'rhsi', role: 'Outcome', title: 'Retail Heat Sensitivity (RHSI)', file: 'RHSI.csv', kind: 'project',
@@ -86,17 +88,20 @@ export const SOURCES: DataSource[] = [
     id: 'salesmix', role: 'Explanation', title: 'Sales Composition', file: 'Urban_Features.csv', kind: 'project',
     description: 'The retail make-up of a neighbourhood: how much of its card spending goes to retail, dining, everyday ' +
       'shops, general and large-format stores.',
-    how: 'Each sector’s card-sales amount ÷ the dong’s total card-sales amount over 2024.',
+    how: 'Each sector’s card-sales amount ÷ the dong’s total card-sales amount over 2024; the “(retail)” versions divide ' +
+      'by its retail card sales instead.',
     space: 'Dong · 422', time: 'Aggregated 2024', source: 'Seoul AI Foundation (processed)',
-    vars: ['retail_share', 'dinebev_share_all', 'everyday_retail_share_all', 'general_share_all', 'large_format_share_all'],
+    vars: ['retail_share', 'dinebev_share_all', 'everyday_retail_share_all', 'general_share_all', 'large_format_share_all',
+      'dinebev_share_retail', 'everyday_retail_share_retail', 'general_share_retail', 'large_format_share_retail'],
   },
   {
     id: 'shap', role: 'Explanation', title: 'SHAP Contributions', file: 'shap_result.csv', kind: 'project',
     description: 'For each neighbourhood, how much each model input pushed its predicted RHSI up or down. It explains ' +
       'the model’s behaviour, not cause and effect.',
-    how: 'SHAP values of a model predicting RHSI from 25 neighbourhood features; the app shows the three strongest.',
+    how: 'SHAP values of a model predicting RHSI from 25 neighbourhood features: the model’s RHSI for a dong is a base ' +
+      'value plus its 25 contributions. All 25 are mapped, in RHSI’s folder.',
     space: 'Dong · 422', time: 'Static', source: 'UHUS model output',
-    vars: ['shap_delta_daypop', 'shap_dnpr', 'shap_land_price'],
+    vars: VARIABLES.filter((x) => x.key.startsWith('shap_')).map((x) => x.key),
   },
   {
     id: 'geometry', role: 'Base', title: 'Dong Boundaries', file: 'Administrative_Dong_Geometry.geojson', kind: 'public',

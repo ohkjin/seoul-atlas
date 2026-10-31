@@ -6,9 +6,10 @@ import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
+import {dailyBase, isIndustry, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
 import {useKepler} from './useKepler';
-import {addDataToMap, onLayerClick, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
-import {adaptElevation, drawSelection, layersOnMap, nextSelection, planFor, restylePair, setCellView, sync3d, syncOrder,
+import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
+import {adaptElevation, drawSelection, layersOnMap, planFor, restylePair, setCellView, sync3d, syncOrder, toggleLink, withMain,
   syncTooltip, type Grain} from './layers';
 import {pairKeysOf, recolourDailyPair} from './pair';
 import TopBar, {SideRail, type PageId} from './TopBar';
@@ -54,7 +55,43 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // What the map is about: up to two variables, linked from the drawer (🔗). Two of a
   // kind are shown on one shared layer (linked, the default) or ⛓ side by side.
   const [selection, setSelection] = useState<string[]>(INITIAL_ON_MAP);
-  const select = (key: string) => setSelection((s) => nextSelection(s, key));
+  // An industry's sales are not on the daily tables until first shown: its file loads, its
+  // column joins them (refreshDailyTables), and only then does it go on the map — a layer
+  // never points at a column that is not there yet.
+  const [industryLoading, setIndustryLoading] = useState<string | null>(null);
+  // an industry is on the daily tables once its column is (its file may have loaded
+  // earlier without one: the dashboard's sales panel reads files on its own)
+  const onTables = (key: string) => !!store.getState().keplerGl.map?.visState.datasets?.gu_daily?.fields.some((f: any) => f.name === key);
+  // as the main (the drawer's map button, a search hit) or linked to it (🔗)
+  const select = (key: string, as: 'main' | 'link' = 'link') => {
+    const next = as === 'main' ? withMain : toggleLink;
+    if (isIndustry(key) && !onTables(key)) {
+      setIndustryLoading(key);
+      loadIndustries([key])
+        .then(() => {
+          refreshDailyTables();
+          setSelection((s) => next(s, key));
+        })
+        .catch((e) => console.error('industry sales failed to load', e))
+        .finally(() => setIndustryLoading(null));
+      return;
+    }
+    setSelection((s) => next(s, key));
+  };
+  // Rebuilds the daily tables with every industry loaded so far, keeping the layers and
+  // filters on them (kepler's replaceDataInMap)
+  const refreshDailyTables = () => {
+    const sets = store.getState().keplerGl.map.visState.datasets;
+    for (const [id, level, label] of [['gu_daily', 'gu', 'Gu · daily'], ['dong_daily', 'dong', 'Dong · daily']] as const) {
+      const base = dailyBase(level);
+      if (!sets[id] || !base) continue;
+      const table = withIndustries(base, level);
+      if (table.fields.every((f) => sets[id].fields.some((g: any) => g.name === f.name))) continue;
+      dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info: {id, label}, data: table} as any,
+        options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
+    }
+  };
+  useEffect(() => { if (data?.guDaily) setDailyBase('gu', data.guDaily as any); }, [data]);
   const [linked, setLinked] = useState(true);
   // the atlas's own filters: a value range per selected variable (ourFilters.ts)
   const [ranges, setRanges] = useState<Ranges>({});
@@ -87,7 +124,11 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const sandbox = page === 'sandbox';
   const setGrain = (g: Grain) => setGrainState(g);   // drawSelection redraws for the new grain
   const [headline, setHeadlineState] = useState(initialHeadline);
-  const setHeadline = (theme: ThemeKey, key: string) => setHeadlineState((h) => ({...h, [theme]: key}));
+  const setHeadline = (theme: ThemeKey, key: string) => {
+    setHeadlineState((h) => ({...h, [theme]: key}));
+    // an industry as a theme's headline needs its sales on the daily tables too
+    if (isIndustry(key) && !onTables(key)) loadIndustries([key]).then(refreshDailyTables).catch(() => {});
+  };
 
   const flyTo = (bounds: Bounds) => kepler?.mapState && flyToBounds(dispatch, kepler.mapState, bounds);
   const focusSeoul = () => { setFocus({level: 'seoul'}); if (kepler?.mapState) flyToView(dispatch, kepler.mapState, SEOUL_VIEW); };
@@ -181,19 +222,27 @@ export default function Overlay({data}: {data: UhusData | null}) {
   useEffect(() => {
     if (!dongDailyNeeded || !data || visState?.datasets?.dong_daily || dongDailyLoading.current) return;
     dongDailyLoading.current = true;
-    loadDongDaily(data.dongs).then((rows) => dispatch(addDataToMap({
-      datasets: [{info: {id: 'dong_daily', label: 'Dong · daily'}, data: rows}],
-      options: {centerMap: false, keepExistingConfig: true, autoCreateLayers: false}
-    } as any))).catch(() => { dongDailyLoading.current = false; });
+    loadDongDaily(data.dongs).then((rows) => {
+      setDailyBase('dong', rows);
+      dispatch(addDataToMap({
+        // with the industries already shown under Gu detail
+        datasets: [{info: {id: 'dong_daily', label: 'Dong · daily'}, data: withIndustries(rows, 'dong')}],
+        options: {centerMap: false, keepExistingConfig: true, autoCreateLayers: false}
+      } as any));
+    }).catch(() => { dongDailyLoading.current = false; });
   }, [dongDailyNeeded, data]);   // eslint-disable-line react-hooks/exhaustive-deps
   const timeIdx = (visState?.filters || []).findIndex((f: any) => f.id === 'time');
   const timeDataIds: string[] = timeIdx >= 0 ? visState.filters[timeIdx].dataId : [];
+  // every daily table plays with the time filter: dong_daily once it loads, and either one
+  // again after an industry's column rebuilt it (replaceDataInMap)
   useEffect(() => {
-    if (timeIdx < 0 || !visState?.datasets?.dong_daily || timeDataIds.includes('dong_daily')) return;
+    if (timeIdx < 0) return;
+    const missing = ['gu_daily', 'dong_daily'].find((id) => visState?.datasets?.[id] && !timeDataIds.includes(id));
+    if (!missing) return;
     // dataset and field in one action: set apart, kepler filtered once in between with no
     // field name and logged an error
-    dispatch(setFilter(timeIdx, ['dataId', 'name'] as any, ['dong_daily', 'date'] as any, timeDataIds.length) as any);
-  }, [datasetKeys, timeIdx]);   // eslint-disable-line react-hooks/exhaustive-deps
+    dispatch(setFilter(timeIdx, ['dataId', 'name'] as any, [missing, 'date'] as any, timeDataIds.length) as any);
+  }, [datasetKeys, timeIdx, timeDataIds.join()]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // 2D ↔ 3D redraws too (daily points become columns); when only the mode changed,
   // drawSelection keeps a layer hidden in kepler's panel hidden on its twin.
@@ -340,7 +389,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
           child — painted later, it frosted the top bar too and swallowed the tabs. */}
       {ready && !sidePanelOpen && !sandbox && <div className="focus-frost" aria-hidden />}
       <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d} onClean={enterClean}
-        search={<SearchBox data={data} selection={selection} onGu={focusGu} onDong={focusDong} onVariable={select} />} />
+        search={<SearchBox data={data} selection={selection} onGu={focusGu} onDong={focusDong} onVariable={(k) => select(k, 'main')} />} />
       {clean && (
         <button className="clean-exit" onClick={() => setClean(false)}>
           <X size={14} strokeWidth={2} aria-hidden />Exit clean mode<kbd>Esc</kbd>
@@ -374,7 +423,8 @@ export default function Overlay({data}: {data: UhusData | null}) {
       {ready && temporalOn && !sandbox && !timeExpanded && (
         <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} onExpand={expandTime} />
       )}
-      {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select} />}
+      {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select}
+        loading={industryLoading} />}
       {ready && dashboardOpen && !sandbox && (
         <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
           onSelect={select} onClose={() => setDashboardOpen(false)}

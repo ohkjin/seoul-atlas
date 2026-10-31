@@ -357,16 +357,77 @@ body.sandbox { --bar-h: 0px; }
 .dash-close { flex: none; display: grid; place-items: center; background: rgba(255,255,255,0.06); border-color: transparent;
   color: var(--ink-2); cursor: pointer; }
 .dash-close:hover { color: var(--ink); background: rgba(255,255,255,0.14); }
-.dash-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(2, minmax(200px, 1fr));
+/* The four panels fill the window's visible height (--grid-h, measured in Dashboard.tsx);
+   the wide SHAP panel follows below them, and the grid scrolls down to it. */
+.dash-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(2, max(200px, calc(var(--grid-h, 640px) / 2 - 6px))); grid-auto-rows: auto;
   gap: 12px; margin-top: 12px; overflow-y: auto; }
+.dash-panel.dash-wide { grid-column: 1 / -1; overflow: visible; min-height: auto; }
 /* a narrow window stacks the panels; a wide, short one lays all four in a row; a short
    one drops the sentence under the numbers */
 @container (max-width: 760px) {
-  .dash-grid { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: minmax(240px, 1fr); }
+  .dash-grid { grid-template-columns: 1fr; grid-template-rows: repeat(4, max(240px, calc(var(--grid-h, 640px) / 2 - 6px))); }
 }
 @container (min-width: 1400px) and (max-height: 620px) {
-  .dash-grid { grid-template-columns: repeat(4, 1fr); grid-template-rows: minmax(200px, 1fr); }
+  .dash-grid { grid-template-columns: repeat(4, 1fr); grid-template-rows: max(200px, calc(var(--grid-h, 640px) - 4px)); }
 }
+/* the SHAP panel's beeswarms (ShapPanel.tsx) */
+.shap-sum { margin: 0 0 6px; font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.shap-sum b { color: var(--ink); font-weight: 600; }
+.shap-svg { display: block; width: 100%; height: auto; }
+.shap-svg circle { cursor: pointer; }
+.shap-hit { fill: transparent; cursor: pointer; }
+.shap-head { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px 2px 2px; border: 0; border-radius: 6px;
+  background: none; color: var(--ink); font: 500 12.5px/1.2 var(--font, inherit); cursor: pointer; }
+.shap-head:hover { background: rgba(255,255,255,0.06); }
+.shap-n { color: var(--ink-3); font-weight: 400; }
+.shap-label { font-size: 11.5px; fill: var(--ink-2); }
+.shap-val { font: 10.5px 'IBM Plex Mono', monospace; fill: var(--ink-2); }
+.shap-val.strong { fill: var(--ink); font-size: 11px; }
+.shap-zero { stroke: rgba(255,255,255,0.22); }
+.shap-zero.faint { stroke: rgba(255,255,255,0.12); }
+.shap-guide { stroke: rgba(255,255,255,0.08); }
+.shap-ring { fill: none; stroke: var(--accent); stroke-width: 2; pointer-events: none; }
+.shap-axis { font-size: 10px; fill: var(--ink-3); }
+.shap-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin-top: 6px; font-size: 10.5px; color: var(--ink-2); }
+.shap-ramp { display: inline-block; width: 80px; height: 6px; margin: 0 4px; border-radius: 3px; vertical-align: 1px;
+  background: linear-gradient(90deg, #3b6fd1, #c9c9d6, #e0484e); }
+.shap-ring-key { display: inline-block; width: 8px; height: 8px; border: 2px solid var(--accent); border-radius: 50%; vertical-align: -1px; }
+/* the sales panel (SalesPanel): a year large with its answer beside, its parts as small years with words */
+.sales { container-type: inline-size; }
+.sp-top, .sp-break { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 24px; align-items: start; }
+.sp-svg { display: block; overflow: visible; }
+.sp-heat { fill: #C0383B; fill-opacity: 0.24; }
+.sp-mild { fill: #3079B4; }
+.sp-base { stroke: rgba(255,255,255,0.08); }
+.sp-day { fill: none; stroke: #d9dee6; stroke-opacity: 0.2; stroke-width: 0.8; }
+.sp-week { fill: none; stroke: #d9dee6; stroke-width: 1.3; }
+.sp-week.big { stroke-width: 1.8; }
+.sp-mean { stroke-width: 1; stroke-dasharray: 4 3; }
+.sp-mean.hot { stroke: #e0484e; } .sp-mean.mild { stroke: #4f86e0; }
+.sp-today { stroke: var(--accent); stroke-width: 1.2; }
+.sp-name { font-size: 11.5px; fill: var(--ink-2); }
+.sp-name.big { font-size: 12.5px; fill: var(--ink); }
+.sp-name.marked { fill: var(--accent); font-weight: 600; }
+.sp-chg { font: 10.5px 'IBM Plex Mono', monospace; fill: var(--ink-3); }
+.sp-chg.fell { fill: #ef8a8e; } .sp-chg.rose { fill: #7fa3e6; }
+.sp-month { font-size: 9.5px; fill: var(--ink-3); }
+.sp-read p, .sp-words p { margin: 0 0 5px; font-size: 12px; color: var(--ink); line-height: 1.35; }
+.sp-read .dim, .sp-words .dim { color: var(--ink-3); font-size: 11px; }
+.sp-big { font-size: 40px; font-weight: 500; line-height: 1.1; margin: 4px 0 6px; font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.sp-means { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 10px 0 !important; font-size: 11px !important; }
+.sp-means .hot, .sales .fell { color: #ef8a8e; } .sp-means .mild, .sales .rose { color: #7fa3e6; }
+.sales b { font-weight: 500; font-family: 'IBM Plex Mono', monospace; font-size: 11px; }
+.sp-big.fell { color: #ef8a8e; } .sp-big.rose { color: #7fa3e6; }
+.sp-dash { display: inline-block; width: 14px; height: 0; margin-right: 5px; vertical-align: 3px; border-top: 1px dashed; }
+.sp-dash.hot { border-color: #e0484e; } .sp-dash.mild { border-color: #4f86e0; }
+.sp-key { display: inline-block; width: 12px; margin-right: 5px; border-radius: 2px; }
+.sp-key.heat { height: 10px; vertical-align: -1px; background: rgba(192,56,59,0.45); }
+.sp-key.mild { height: 3px; vertical-align: 2px; background: #3079B4; }
+.sp-sub { margin: 14px 0 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);
+  font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.sp-words h4 { margin: 12px 0 5px; font-size: 11px; font-weight: 500; }
+@container (max-width: 640px) { .sp-top, .sp-break { grid-template-columns: 1fr; gap: 10px; } }
 @container (max-height: 520px) { .dash-story { display: none; } }
 .dash-panel { min-width: 0; min-height: 0; overflow: auto; padding: 10px 12px; border-radius: 14px;
   background: rgba(255,255,255,0.03); border: var(--hair) solid var(--glass-line); }
@@ -547,10 +608,12 @@ body.sandbox { --bar-h: 0px; }
 .dsub { margin: 8px 8px 2px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--ink-3); list-style: none; }
 .dpick { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 9px; cursor: pointer; }
-/* in a row: name, its ⓘ (shown while the row is hovered), then 🔗 at the far end */
+/* in a row: name, its ⓘ (shown while the row is hovered), then the map button and 🔗 at the far end */
 .drow .info-tip { opacity: 0; }
 .drow:hover .info-tip, .drow .info-tip:focus-visible { opacity: 1; }
-.drow .dicon.link { margin-left: auto; }
+.drow .dicon.map { margin-left: auto; }
+/* the map button: this row as the map's main (its colour); lit on the main */
+.dicon.map.on { color: var(--accent); }
 .dpick input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 0; border-radius: 999px;
   border: 1.5px solid var(--ink-4); cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s, background-color 0.15s; }
 .dpick input:hover { border-color: var(--ink-3); }
@@ -561,10 +624,21 @@ body.sandbox { --bar-h: 0px; }
   transition: color 0.12s, background-color 0.12s, opacity 0.12s; }
 .dicon:hover:not(:disabled) { color: var(--ink); background: rgba(255,255,255,0.08); }
 .dicon:disabled { opacity: 0.28; }
-/* 🔗 link to the map; the small number is the order — 1 is A, 2 is B */
-.dicon.link { position: relative; }
+/* 🔗 link to the main: kept out of sight until a row is hovered, or a main has just been
+   picked (.linking) — then they come up together, the next thing to do. The lit one stays. */
+.dicon.link { position: relative; opacity: 0; transition: color 0.12s, background-color 0.12s, opacity 0.3s; }
+.drow:hover .dicon.link, .drawer.linking .dicon.link, .dicon.link.on, .dicon.link.busy, .dicon.link:focus-visible { opacity: 1; }
+.dicon.link.self { visibility: hidden; }
+.dicon.link.busy svg { animation: dspin 0.9s linear infinite; }
+@keyframes dspin { to { transform: rotate(360deg); } }
+/* folders: a head's chevron and count; its contents indented under a thin guide line */
+.dfold { flex: none; display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; padding: 2px 5px 2px 3px;
+  border: 0; border-radius: 6px; background: rgba(255,255,255,0.05); color: var(--ink-3); cursor: pointer;
+  font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.dfold:hover { color: var(--ink); background: rgba(255,255,255,0.1); }
+.drow.child { margin-left: 14px; padding-left: 10px; border-radius: 0 10px 10px 0; border-left: 1px solid var(--line); height: 30px; }
+.drow.child .dname { font-size: 12.5px; }
 .dicon.link.on { color: var(--accent); }
-.link-n { position: absolute; right: 1px; bottom: 0; font-size: 9px; font-weight: 600; line-height: 1; color: var(--accent); }
 
 /* ---------- kepler, restyled from outside (v3.2.6 class names) ---------- */
 /* Its time widget stays mounted — it runs the animation loop — but the time card is the face. */

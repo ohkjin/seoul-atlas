@@ -1,0 +1,93 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Mockup: the dashboard's bottom panel when sales are on the map — heat response by industry.
+     Each row is every neighbourhood (dot) placed by how its sales in that industry change on
+     hot days against mild days (log of the two daily means), coloured by the industry's sales
+     there (small blue → large red). Sector rows sum their industries; the focused place is
+     ringed with its change at the right. Real values from UHUS sales + Daily_Weather. -->
+<style>
+  body { margin: 0; background: #0b0d11; color: #eef2f7; font-family: Inter, system-ui, sans-serif; padding: 24px; }
+  .panel { width: 980px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px 16px 14px; }
+  h3 { margin: 0 0 4px; font-size: 10px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: #6f7886; }
+  .sum { font-size: 11.5px; color: #a9b2bf; margin-bottom: 6px; } .sum b { color: #eef2f7; }
+  .legend { display: flex; gap: 18px; align-items: center; font-size: 10.5px; color: #a9b2bf; margin-top: 8px; }
+  .ramp { width: 80px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #3b6fd1, #c9c9d6, #e0484e); display: inline-block; margin: 0 6px; vertical-align: 1px; }
+</style>
+<body>
+<div class="panel">
+  <h3>Heat response by industry — hot vs mild days</h3>
+  <div class="sum" id="sum"></div>
+  <svg id="svg" width="948"></svg>
+  <div class="legend">
+    <span>dot = a neighbourhood · left: sales fall on hot days, right: they rise</span>
+    <span>its sales in that industry: small<span class="ramp"></span>large</span>
+    <span><svg width="14" height="14"><circle cx="7" cy="7" r="4.5" fill="none" stroke="#e8a35c" stroke-width="2"/></svg> this place</span>
+  </div>
+</div>
+<script>
+const SECTORS = [
+  ['F&B', ['korean_cuisine','Korean food'],['japanese_cuisine','Japanese food'],['western_cuisine','Western food'],['chinese_cuisine','Chinese food'],['bakery','Bakery'],['cafe','Cafe'],['fast_food','Fast food'],['other_food','Other food'],['other_food_service','Other food service'],['liquor_store','Liquor store']],
+  ['Retail & goods', ['department_store','Department store'],['supermarket_large_format','Hypermarket'],['discount_store','Discount store'],['shopping_mall','Shopping mall'],['chain_grocery','Chain grocery'],['independent_grocery','Local grocery'],['convenience_store','Convenience store'],['general_merchandise_imported','General & imported goods'],['fresh_produce_seafood','Produce & seafood'],['butcher_shop','Butcher'],['home_appliances','Home appliances'],['furniture','Furniture'],['other_distribution','Other distribution'],['chain_store','Chain store'],['brand_exclusive_store','Brand store'],['office_equipment_stationery','Office & stationery'],['handmade_goods_store','Handmade goods'],['gift_certificate_lottery','Gift cards & lottery']],
+  ['Fashion & beauty', ['apparel','Apparel'],['fashion_accessories','Fashion accessories'],['watches_jewelry','Watches & jewelry'],['cosmetics','Cosmetics'],['hair_salon','Hair salon'],['beauty_service','Beauty service'],['massage_spa','Massage & spa'],['sauna_bathhouse','Sauna'],['laundry_dry_cleaner','Laundry'],['door_to_door_mlm_sales','Door-to-door sales']],
+  ['Health & culture', ['pharmacy','Pharmacy'],['general_hospital','General hospital'],['general_clinic','Clinic'],['dental_clinic','Dentist'],['korean_medicine_clinic','Korean medicine'],['public_health_center','Public health center'],['other_medical','Other medical'],['veterinary_clinic','Veterinary'],['academy_learning_materials','Academies'],['school_tuition','School tuition'],['study_room','Study room'],['kindergarten','Kindergarten'],['books','Books'],['bookstore','Bookstore'],['cultural_goods','Cultural goods'],['movie_performance','Movies & shows'],['instruments_records','Music & records'],['computer_software','Computers & software']],
+  ['Leisure & travel', ['gym','Gym'],['sports_facility','Sports facility'],['sports_leisure_goods','Sports goods'],['indoor_outdoor_golf','Golf'],['leisure_town_amusement_park','Amusement park'],['game_room_arcade','Arcade'],['karaoke','Karaoke'],['entertainment_venue','Nightlife'],['motel_inn_other_lodging','Motel & inn'],['hotel_condo','Hotel & condo'],['gas_station','Gas station'],['parking_lot','Parking lot'],['auto_service','Auto service'],['auto_accessories','Auto parts'],['used_car_dealer','Used cars'],['motorcycle','Motorcycles'],['toys_kids_bicycles','Toys & bicycles'],['lpg_gas','LPG gas']],
+  ['Housing & services', ['real_estate_agency','Real estate agency'],['interior_building_materials_kitchenware','Interior & kitchen'],['legal_office_service','Legal services'],['accounting_patent_service','Accounting & patents'],['research_translation_service','Research & translation'],['wedding_hall_service','Wedding hall'],['funeral_home_cemetery','Funeral & cemetery'],['pet_shop','Pet shop'],['flower_shop','Flower shop'],['used_goods_store','Secondhand goods']]
+];
+fetch('sales-swarm.json').then(r => r.json()).then(d => {
+  const ii = Object.fromEntries(d.ind.map((k, i) => [k.replace(/_amount$/, ''), i]));
+  const focus = d.rows.find(r => r.code === d.focus);
+  const LABEL = 200, VALW = 64, W = 948, PLOT = W - LABEL - VALW, ROW = 32, GROW = 36, R = 1.6, GAP = R * 2 + 0.25;
+  // too little to read: under 100,000 KRW a mild day, a few card payments swing the ratio
+  const MIN_DAILY = 100000;
+  const lr = (r, ids) => { const h = ids.reduce((s, i) => s + r.hot[i], 0), m = ids.reduce((s, i) => s + r.mild[i], 0); return h > 0 && m >= MIN_DAILY ? Math.log(h / m) : NaN; };
+  const size = (r, ids) => ids.reduce((s, i) => s + r.hot[i] + r.mild[i], 0);
+  const all = d.rows.flatMap(r => d.ind.map((_, i) => lr(r, [i]))).filter(Number.isFinite).map(Math.abs).sort((a, b) => a - b);
+  // −50% to +100% (a log ratio of ±0.69) at most: the few sparse industries beyond sit pinned at the ends
+  const lim = Math.min(all[Math.floor(all.length * 0.97)], Math.log(2));
+  const X = v => LABEL + (Math.max(-lim, Math.min(lim, v)) + lim) / (2 * lim) * PLOT;
+  const pct = v => Number.isFinite(v) ? `${v >= 0 ? '+' : '−'}${Math.abs((Math.exp(v) - 1) * 100).toFixed(0)}%` : '—';
+  const colour = t => { const a = [59,111,209], m = [201,201,214], b = [224,72,78]; const [p, q, u] = t < 0.5 ? [a, m, t * 2] : [m, b, (t - 0.5) * 2]; return `rgb(${p.map((c, i) => Math.round(c + (q[i] - c) * u)).join(',')})`; };
+  const swarm = (vals, cols, y0, h) => {
+    const px = vals.map(v => Number.isFinite(v) ? X(v) : NaN);
+    const order = px.map((_, i) => i).filter(i => Number.isFinite(px[i])).sort((a, b) => px[a] - px[b]);
+    const dy = []; let act = [], out = '';
+    for (const i of order) {
+      act = act.filter(j => px[i] - px[j] < GAP);
+      let y = 0;
+      for (let k = 0; k < 80; k++) { y = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * GAP; if (!act.some(j => Math.hypot(px[i] - px[j], dy[j] - y) < GAP)) break; }
+      dy[i] = Math.max(-(h / 2 - R), Math.min(h / 2 - R, y)); act.push(i);
+      out += `<circle cx="${px[i].toFixed(1)}" cy="${(y0 + dy[i]).toFixed(1)}" r="${R}" fill="${cols ? cols[i] : 'rgba(169,178,191,0.55)'}" fill-opacity="0.85"/>`;
+    }
+    return out;
+  };
+  // colour by rank among the dots drawn in the row
+  const rankCols = (vals, drawn) => { const s = vals.filter((_, i) => drawn[i]).sort((a, b) => a - b); return vals.map(v => colour(Math.max(0, s.indexOf(v)) / Math.max(1, s.length - 1))); };
+  let y = 4, svg = '';
+  const row = (label, ids, cols, head, yh) => {
+    const yc = y + yh / 2, vals = d.rows.map(r => lr(r, ids)), fv = lr(focus, ids);
+    svg += head ? `<text x="0" y="${yc + 4}" font-size="12.5" fill="#eef2f7">${label}</text>` : `<line x1="10" x2="10" y1="${y}" y2="${y + yh}" stroke="rgba(255,255,255,0.08)"/><text x="22" y="${yc + 4}" font-size="11.5" fill="#a9b2bf">${label}</text>`;
+    svg += `<line x1="${X(0)}" x2="${X(0)}" y1="${y + 3}" y2="${y + yh - 3}" stroke="rgba(255,255,255,${head ? 0.22 : 0.12})"/>`;
+    svg += swarm(vals, cols, yc, yh - 4);
+    if (Number.isFinite(fv)) svg += `<circle cx="${X(fv)}" cy="${yc}" r="4.6" fill="none" stroke="#e8a35c" stroke-width="2"/>`;
+    svg += `<text x="${W}" y="${yc + 4}" text-anchor="end" font-size="${head ? 11 : 10.5}" font-family="IBM Plex Mono" fill="${head ? '#eef2f7' : '#a9b2bf'}">${pct(fv)}</text>`;
+    y += yh;
+  };
+  const allIds = d.ind.map((_, i) => i);
+  row('All card sales', allIds, null, true, GROW);
+  const sectors = SECTORS.map(([name, ...kids]) => [name, kids, kids.map(([k]) => ii[k])])
+    .sort((a, b) => Math.abs(lr(focus, b[2]) || 0) - Math.abs(lr(focus, a[2]) || 0));
+  sectors.forEach(([name, kids, ids], si) => {
+    const open = si < 1;
+    row(`${open ? '▾' : '▸'} ${name} <tspan fill="#6f7886">(${kids.length})</tspan>`, ids, null, true, GROW);
+    if (!open) return;
+    kids.slice().sort((a, b) => Math.abs(lr(focus, [ii[b[0]]]) || 0) - Math.abs(lr(focus, [ii[a[0]]]) || 0))
+      .forEach(([k, label]) => row(label, [ii[k]], rankCols(d.rows.map(r => size(r, [ii[k]])), d.rows.map(r => Number.isFinite(lr(r, [ii[k]])))), false, ROW));
+  });
+  y += 4;
+  svg += `<text x="${X(-lim)}" y="${y + 10}" font-size="10" fill="#6f7886">${pct(-lim)}</text><text x="${X(0)}" y="${y + 10}" font-size="10" fill="#6f7886" text-anchor="middle">0</text><text x="${X(lim)}" y="${y + 10}" font-size="10" fill="#6f7886" text-anchor="end">${pct(lim)}</text>`;
+  const s = document.getElementById('svg'); s.setAttribute('height', y + 16); s.innerHTML = svg;
+  document.getElementById('sum').innerHTML = `${focus.name} · all its card sales <b>${pct(lr(focus, allIds))}</b> on hot days against mild days · 422 neighbourhoods per row (fewer where an industry sells under ₩100,000 a day)`;
+});
+</script>
+</body>

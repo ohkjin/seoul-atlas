@@ -1,4 +1,4 @@
-import {useEffect, useMemo} from 'react';
+import {useEffect, useMemo, useRef} from 'react';
 import {Equal, GripHorizontal, Maximize2, Minimize2, X} from 'lucide-react';
 import {VAR_BY_KEY, type Variable} from '../../data/catalog';
 import type {Place, UhusData} from '../../data/uhus';
@@ -11,6 +11,8 @@ import BigScatter from './BigScatter';
 import HeatResponse from './HeatResponse';
 import Ranking from './Ranking';
 import MiniMaps from './MiniMaps';
+import ShapPanel from './ShapPanel';
+import SalesPanel, {isSalesKey} from './SalesPanel';
 import {uiZoom} from '../uiScale';
 import {useWindowFrame, type Grip} from '../useWindowFrame';
 import Summary from './Summary';
@@ -24,9 +26,12 @@ export type DashCtx = Props & {vars: Variable[]; places: Place[]; series: Map<st
 
 // The dashboard: a window floating over the map — moved and resized the way kepler.gl's
 // legend is (useWindowFrame: grips that show on hover, anchored to the nearer edges,
-// remembered), maximised by double-clicking its title bar — with four views of the same selection and focus as the map: the scatter,
-// large; the heat response of the focused place; the ten highest and lowest places; and
-// the whole theme as small maps. Clicking a place in any of them focuses the map there.
+// remembered), maximised by double-clicking its title bar — with four views of the same
+// selection and focus as the map: the scatter, large; the heat response of the focused
+// place; the ten highest and lowest places; and the whole theme as small maps. Below them,
+// scrolled to, a wide panel that follows the selection: sales leading it, their year and the
+// heat (SalesPanel); otherwise what drives RHSI (the SHAP beeswarms). Clicking a place in
+// any of them focuses the map there.
 const MIN = {w: 560, h: 380};
 const EDGES: Grip[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
@@ -54,6 +59,16 @@ export default function Dashboard(props: Props) {
     return {ax: 'right', x: 16, ay: 'top', y: 76, w: Math.max(Math.min(1080, W - 32), W * 0.72),
       h: Math.max(Math.min(840, H - 84), H - 110)};
   }, MIN);
+  // the four panels fill the grid's visible height (--grid-h in styles.css), the SHAP panel
+  // scrolls in below them
+  const grid = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = grid.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => el.style.setProperty('--grid-h', `${el.clientHeight}px`));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', esc);
@@ -79,11 +94,14 @@ export default function Dashboard(props: Props) {
         </div>
       </div>
       <Summary ctx={ctx} />
-      <div className="dash-grid">
+      <div className="dash-grid" ref={grid}>
         <section className="dash-panel"><h3>{vars.length === 2 ? 'Relationship' : 'Spread'}</h3><BigScatter ctx={ctx} /></section>
         <section className="dash-panel"><h3>Heat response</h3><HeatResponse ctx={ctx} /></section>
         <section className="dash-panel"><h3>Ranking{vars[0] ? ` — ${vars[0].short}` : ''}</h3><Ranking ctx={ctx} /></section>
         <section className="dash-panel"><h3>Theme at a glance</h3><MiniMaps ctx={ctx} /></section>
+        {vars[0] && isSalesKey(vars[0].key)
+          ? <section className="dash-panel dash-wide"><h3>Sales — the year, and the heat</h3><SalesPanel ctx={ctx} /></section>
+          : <section className="dash-panel dash-wide"><h3>What drives RHSI — SHAP, by group</h3><ShapPanel ctx={ctx} /></section>}
       </div>
       {/* kepler's grips: a move handle centred on the top edge, resize handles on the
           bottom and right edges, and every edge and corner resizable */}

@@ -58,7 +58,7 @@ export default function SearchBox({data, selection, onGu, onDong, onVariable}: P
     if (!h) return;
     if (h.kind === 'gu') onGu(h.place);
     else if (h.kind === 'dong') onDong(h.place);
-    else if (!selection.includes(h.key)) onVariable(h.key);
+    else onVariable(h.key);
     setText('');
     setOpen(false);
     input.current?.blur();

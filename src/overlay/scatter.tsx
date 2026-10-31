@@ -156,8 +156,8 @@ export const Scatter = memo(function Scatter({places, vars, box, plot, colourOf,
       {/* the bivariate grid's thirds, the same cuts that colour the map */}
       {showCuts && plot.cuts && (
         <g className="gc-cuts">
-          {plot.cuts.x.map((x) => <line key={`x${x}`} x1={x} x2={x} y1={pad.t} y2={H - pad.b} />)}
-          {plot.cuts.y.map((y) => <line key={`y${y}`} x1={pad.l} x2={W - pad.r} y1={y} y2={y} />)}
+          {plot.cuts.x.map((x, i) => <line key={`x${i}`} x1={x} x2={x} y1={pad.t} y2={H - pad.b} />)}
+          {plot.cuts.y.map((y, i) => <line key={`y${i}`} x1={pad.l} x2={W - pad.r} y1={y} y2={y} />)}
         </g>
       )}
       {places.map((p) => {
