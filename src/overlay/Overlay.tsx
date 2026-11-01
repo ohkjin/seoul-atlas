@@ -441,7 +441,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
         <FocusBlock data={data!} focus={focus} onSeoul={focusSeoul} onGu={focusGu} onDong={focusDong}
           grain={grain} onGrain={setGrain} selection={selection} linked={linked}
           pairable={planFor(selection, linked, grain).pairable} onLink={() => setLinked((v) => !v)}
-          ranges={ranges} onRange={setRange} />
+          ranges={ranges} onRange={setRange} onSelect={select} />
       )}
       {ready && !sandbox && (
         <GraphCard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}

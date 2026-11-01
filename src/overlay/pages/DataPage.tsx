@@ -21,7 +21,7 @@ export default function DataPage({selection, onSelect, onClose}: Props) {
       <div className="page-eyebrow">Data</div>
       <h1 className="page-title">What the atlas is made of</h1>
       <p className="page-lede">
-        All of it for 2024: daily weather and card sales for every neighbourhood, the heat-sensitivity index the study
+        All of it for 2024: daily weather and card sales for every neighborhood, the heat-sensitivity index the study
         derives from them, and the urban context that helps explain it.
       </p>
       {ROLES.map(({role, sub}) => {
@@ -39,7 +39,7 @@ export default function DataPage({selection, onSelect, onClose}: Props) {
           Information Service (EGIS), Ministry of Land, Infrastructure and Transport (MOLIT) and Seoul Metro. Card sales:
           Seoul AI Foundation. Basemap © CARTO, © OpenStreetMap contributors.
         </p>
-        <p>Values are exploratory research outputs, not operational estimates. Check each source's licence and attribution before reuse.</p>
+        <p>Values are exploratory research outputs, not operational estimates. Check each source's license and attribution before reuse.</p>
       </div>
     </Page>
   );

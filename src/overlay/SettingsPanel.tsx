@@ -27,8 +27,8 @@ const GROUPS: [string, string][] = [['label', 'Labels'], ['road', 'Roads'], ['bu
 const GROUP_DEFAULTS: Record<string, boolean> = {label: false};
 // Ours, drawn over the map (MapAnnotations).
 const OURS: [keyof Annotations, string, string][] = [
-  ['names', 'Gu · dong names', 'Districts on the whole city, neighbourhoods when zoomed in'],
-  ['boundaries', 'Gu · dong boundaries', 'Dashed outlines; neighbourhoods when zoomed in'],
+  ['names', 'Gu · dong names', 'Districts on the whole city, neighborhoods when zoomed in'],
+  ['boundaries', 'Gu · dong boundaries', 'Dashed outlines; neighborhoods when zoomed in'],
   // the hex grid from afar (layers.ts cellView) is off for now; this line brings its switch back:
   // ['hexFar', 'Hex grid from afar (3D)', 'Below zoom 8.8 the areas lie down as a flat hex grid'],
 ];
@@ -36,7 +36,7 @@ const OURS: [keyof Annotations, string, string][] = [
 // the real map, and the bubbles' halos.
 const LOOKS: [Look3d, string, string, string][] = [
   ['glow', 'Glow', 'Overlaps add up to light', lookGlow],
-  ['solid', 'Solid', 'Each area in its own colour', lookSolid],
+  ['solid', 'Solid', 'Each area in its own color', lookSolid],
 ];
 const STORE_KEY = 'seoul-atlas.settings';
 // The panel's two tabs (mockups/settings-tabs.html): how the map looks, and what to do with

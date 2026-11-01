@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600&family=Cormorant+Garamond:wght@500&display=swap" rel="stylesheet">
+<!-- Mockup: picking the map's variables from the left panel's cards, not only from the drawer.
+     The selection is one state, so a pick here moves the drawer's marks and the map too.
+     Three ways to offer it. -->
+<style>
+  :root { --ink: #eef2f7; --ink-2: #c4cbd5; --ink-3: #6f7886; --ink-4: #4a515c; --accent: #e8a35c; --line: rgba(255,255,255,0.08); }
+  body { margin: 0; background: #0b0d11; color: var(--ink); font-family: Manrope, system-ui, sans-serif; padding: 24px; width: 1180px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; align-items: start; }
+  .opt { font: 600 13px Manrope; color: var(--accent); margin: 0 0 4px; }
+  .how { font-size: 11.5px; color: #a9b2bf; margin: 0 0 14px; line-height: 1.55; min-height: 86px; } .how b { color: var(--ink); font-weight: 500; }
+  .panel { position: relative; background: radial-gradient(120% 80% at 0% 0%, #171a20, #0e1014); border: 1px solid var(--line); border-radius: 16px; padding: 18px 18px 22px; min-height: 560px; }
+  .eye { font-size: 10px; letter-spacing: .16em; color: var(--ink-2); }
+  .place { font-family: 'Cormorant Garamond', serif; font-size: 52px; line-height: 1; margin: 6px 0 8px; }
+  .sent { font-size: 12.5px; color: var(--ink-2); padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .sent u { text-decoration: none; border-bottom: 1px dashed var(--accent); color: var(--ink); }
+  .card { margin-top: 16px; position: relative; }
+  .meta { font-size: 10px; letter-spacing: .14em; color: var(--accent); } .meta span { color: var(--ink-3); margin-left: 6px; letter-spacing: .04em; }
+  .row { display: flex; align-items: center; gap: 7px; margin-top: 8px; font-size: 14px; }
+  .ic { color: var(--ink-3); font-size: 12px; }
+  .val { font-size: 22px; font-weight: 300; margin-top: 4px; } .val small { font-size: 11px; color: var(--ink-3); margin-left: 4px; }
+  .bar { height: 4px; border-radius: 2px; margin-top: 8px; width: 150px; background: linear-gradient(90deg, #2e3140, #7b3f6c, #c8467f); }
+  .bar.b { background: linear-gradient(90deg, #2e3140, #2f6e78, #35b0b5); }
+  .link { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--accent); border: 1px solid rgba(232,163,92,0.5); border-radius: 999px; padding: 3px 10px; margin-top: 12px; }
+  .name { cursor: pointer; }
+  .name.pick { border-bottom: 1px dashed var(--accent); }
+  .chev { color: var(--accent); font-size: 11px; }
+  .menu { position: absolute; left: 0; top: 46px; width: 250px; background: #14171c; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 6px; z-index: 5; box-shadow: 0 14px 34px rgba(0,0,0,0.55); font-size: 12px; }
+  .menu input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.06); border: 0; border-radius: 7px; padding: 6px 9px; color: var(--ink); font: inherit; margin-bottom: 4px; }
+  .menu .g { font-size: 9.5px; letter-spacing: .14em; color: var(--ink-3); padding: 7px 8px 3px; }
+  .menu .i { padding: 5px 8px; border-radius: 6px; color: var(--ink-2); display: flex; justify-content: space-between; }
+  .menu .i.on { color: var(--accent); } .menu .i.h { background: rgba(255,255,255,0.08); color: var(--ink); }
+  .menu .i small { color: var(--ink-4); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+  .chip { font-size: 10.5px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-3); }
+  .chip.on { border-color: rgba(232,163,92,0.6); color: var(--accent); }
+  .chip.more { border-style: dashed; }
+  .add { margin-top: 18px; border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px; padding: 9px 12px; font-size: 12px; color: var(--ink-3); display: flex; gap: 6px; }
+  .swapbtn { font-size: 11px; color: var(--ink-3); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+  .cursor { position: absolute; font-size: 15px; color: #fff; z-index: 6; }
+  .drawer { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; font-size: 10.5px; color: var(--ink-3); }
+  .drawer b { color: var(--accent); font-weight: 500; }
+</style>
+<body>
+<div class="grid" id="g"></div>
+<script>
+const head = `<div class="eye">SEOUL METROPOLITAN CITY</div><div class="place">Seoul</div>
+  <div class="sent">All of Seoul — <u>25 districts</u>, mapped by <u>neighbourhood</u>.</div>`;
+const cardA = (name, extra = '') => `<div class="card"><div class="meta">INSIGHTS <span>2024</span></div>
+  <div class="row"><span class="name pick">${name}</span><span class="chev">⌄</span><span class="ic">ⓘ</span><span class="ic">⊽</span></div>
+  <div class="val">-0.05 <small>log-ratio MEAN</small></div><div class="bar"></div>${extra}</div>`;
+const cardB = `<div class="card"><div class="meta">ENVIRONMENT <span>2024-01-01</span></div>
+  <div class="row"><span class="name pick">Max temperature (daily)</span><span class="chev">⌄</span><span class="ic">ⓘ</span><span class="ic">⊽</span></div>
+  <div class="val">6.68 <small>°C MEAN</small></div><div class="bar b"></div></div>`;
+const menu = `<div class="menu"><input value="" placeholder="Search a variable">
+  <div class="g">INSIGHTS</div><div class="i on">RHSI <small>on the map</small></div><div class="i">SHAP · Sales mix</div>
+  <div class="g">ECONOMY</div><div class="i h">Retail sales (daily)</div><div class="i">F&amp;B (daily)</div><div class="i">Retail share</div>
+  <div class="g">PEOPLE</div><div class="i">Elderly</div><div class="i">Low income</div></div><span class="cursor" style="left:60px;top:132px">↖</span>`;
+const sync = `<div class="drawer">Drawer below: <b>Retail sales</b> gets the map mark, RHSI loses it — the same pick.</div>`;
+const opts = [
+  ['A · The name is a menu', 'Each card\'s <b>variable name</b> opens a small searchable list of every variable, grouped by theme. Picking one <b>replaces that card\'s</b> variable — the main\'s card sets the main, the second\'s the second. The drawer marks follow.',
+    `${head}<div style="position:relative">${cardA('RHSI', menu)}</div><div class="link">⛓ Linked · one map</div>${cardB}${sync}`],
+  ['B · Same, plus an empty slot', 'As A, and with <b>only a main</b> on the map, an empty card under it — <b>"+ Compare with…"</b> — opens the same list to link a second. Its ✕ (on hover) drops the second.',
+    `${head}${cardA('RHSI')}<div class="add">＋ Compare with…</div>${sync.replace('Retail sales</b> gets the map mark, RHSI loses it', 'the linked one</b> gets its mark')}`],
+  ['C · Theme chips under the card', 'Under each card, <b>chips of the same theme\'s</b> other variables — one click swaps within the theme; <b>More…</b> opens the drawer at that theme. Quick for neighbours, but a card grows by a row.',
+    `${head}${cardA('RHSI', `<div class="chips"><span class="chip on">RHSI</span><span class="chip">SHAP · Sales mix</span><span class="chip">SHAP · People</span><span class="chip more">More…</span></div>`).replace('<span class="chev">⌄</span>', '')}<div class="link">⛓ Linked · one map</div>${cardB.replace('<span class="chev">⌄</span>', '').replace('<div class="bar b"></div>', '<div class="bar b"></div><div class="chips"><span class="chip on">Max temp</span><span class="chip">Apparent max</span><span class="chip">Heat days</span><span class="chip more">More…</span></div>')}`],
+];
+document.getElementById('g').innerHTML = opts.map(([n, h, body]) => `<div><div class="opt">${n}</div><p class="how">${h}</p><div class="panel">${body}</div></div>`).join('');
+</script>
+</body>

@@ -275,6 +275,20 @@ body.sandbox { --bar-h: 0px; }
 .lc-theme { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
 .lc-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .lc-name { min-width: 0; font-size: 14px; }
+/* the card's name picks another variable (VarPicker): a dashed underline on hover, nothing else */
+.lc-pick { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; border-bottom: 1px dashed transparent; transition: border-color 0.12s; }
+.lc-pick:hover, .lc-pick.open { border-bottom-color: var(--accent); }
+.lc-compare { display: block; width: 100%; margin-top: 14px; padding: 9px 12px; border: 1px dashed rgba(255,255,255,0.18); border-radius: 10px;
+  background: none; color: var(--ink-3); font: inherit; font-size: 12px; text-align: left; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
+.lc-compare:hover, .lc-compare.open { color: var(--ink); border-color: rgba(232, 163, 92, 0.6); }
+.var-pop { width: 260px; }
+.vp-search { width: 100%; box-sizing: border-box; margin-bottom: 4px; padding: 7px 10px; border: 0; border-radius: 9px;
+  background: rgba(255,255,255,0.06); color: var(--ink); font: inherit; font-size: 12.5px; outline: none; }
+.vp-clear { display: block; width: 100%; padding: 7px 10px; border: 0; border-radius: 9px; background: none; color: var(--ink-3);
+  font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.vp-clear:hover { background: rgba(255,255,255,0.08); color: var(--ink); }
+.var-pop .pp-grid button.child { padding-left: 22px; font-size: 12px; }
 /* ⓘ right after a variable's name (left cards and drawer rows) and the card it opens */
 .info-tip { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; background: none;
   display: inline-grid; place-items: center; color: var(--ink-3); cursor: help; transition: color 0.12s, background-color 0.12s; }
@@ -459,6 +473,45 @@ body.sandbox { --bar-h: 0px; }
   font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
 .sp-words h4 { margin: 12px 0 5px; font-size: 11px; font-weight: 500; }
 @container (max-width: 640px) { .sp-top, .sp-break { grid-template-columns: 1fr; gap: 10px; } }
+/* the weather panel: the Sales panel's frame (WeatherPanel.tsx) */
+.sp-seoul { fill: none; stroke: #a7aeb8; stroke-width: 1; stroke-dasharray: 3 3; }
+.sp-rain { fill: #d9dee6; fill-opacity: 0.75; }
+.sp-grid { stroke: rgba(255,255,255,0.06); }
+.sp-dash.seoul { border-color: #a7aeb8; }
+.sp-big-unit { font-size: 15px; font-weight: 500; }
+.weather .sp-name.marked { fill: var(--ink); }
+.weather .sp-big { color: var(--ink); }
+/* what an input does to RHSI (EffectPanel.tsx) */
+.fx-two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.fx-two.one { grid-template-columns: 1fr; gap: 12px; }
+.fx-head { margin: 4px 0 2px; font-size: 11px; color: var(--ink-2); }
+.fx-dot { fill: #8b929c; fill-opacity: 0.55; cursor: pointer; }
+.fx-dot:hover { fill: var(--ink); fill-opacity: 1; }
+.fx-dot.on { fill: var(--ink); fill-opacity: 0.9; pointer-events: none; }
+.fx-mean { fill: none; stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.fx-ring { fill: none; stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.gc-ticks line.fx-zero, .fx-zero { stroke: rgba(255,255,255,0.45); }
+.fx-bar.down { fill: #85BCD9; fill-opacity: 0.5; } .fx-bar.up { fill: #EE9A7C; fill-opacity: 0.5; }
+.fx-bar.on { fill-opacity: 1; }
+.fx-val { font-size: 10.5px; fill: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.fx-key { display: inline-block; margin-right: 5px; vertical-align: 1px; }
+.fx-key.dot { width: 6px; height: 6px; border-radius: 50%; background: #8b929c; }
+.fx-key.line { width: 14px; height: 2px; background: var(--ink); vertical-align: 3px; }
+.fx-key.bar { width: 8px; height: 10px; border-radius: 2px; margin-right: 2px; vertical-align: -1px; }
+.fx-key.bar.down { background: #85BCD9; } .fx-key.bar.up { background: #EE9A7C; margin-right: 5px; }
+/* by district (DistrictPanel.tsx) */
+.dc-lit { fill: rgba(255,255,255,0.06); }
+.dc-name { font-size: 11px; fill: var(--ink-2); cursor: pointer; }
+.dc-name.on { fill: var(--ink); font-weight: 600; }
+.dc-name:hover { fill: var(--ink); }
+.dc-range { stroke: rgba(255,255,255,0.12); }
+.dc-dot { fill: #6b727c; fill-opacity: 0.75; cursor: pointer; }
+.dc-dot.on { fill: #c2c8d0; }
+.dc-dot:hover { fill: var(--ink); fill-opacity: 1; }
+.dc-med { stroke: var(--ink); stroke-width: 2; pointer-events: none; }
+.dc-seoul { stroke: #a7aeb8; stroke-dasharray: 3 3; }
+.dc-focus { fill: var(--ink); stroke: #16191e; stroke-width: 1.5; pointer-events: none; }
+.dc-key.med { display: inline-block; width: 2px; height: 10px; margin-right: 5px; background: var(--ink); vertical-align: -1px; }
 @container (max-height: 520px) { .dash-story { display: none; } }
 .dash-panel { min-width: 0; min-height: 0; overflow: auto; padding: 10px 12px; border-radius: 14px;
   background: rgba(255,255,255,0.03); border: var(--hair) solid var(--glass-line); }

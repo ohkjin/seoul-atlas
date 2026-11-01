@@ -73,7 +73,7 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
       {!collapsed && (!a ? (
         <div className="graph-placeholder">Link a variable below to see how its places spread</div>
       ) : plot.n === 0 ? (
-        <div className="graph-placeholder">Loading the {grain === 'dong' ? 'neighbourhood' : 'district'} values…</div>
+        <div className="graph-placeholder">Loading the {grain === 'dong' ? 'neighborhood' : 'district'} values…</div>
       ) : (
         <>
           <Scatter places={places} series={series} vars={vars} box={box} plot={plot} colourOf={colourOf} showCuts={bivariate}
@@ -93,8 +93,8 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
             ) : (
               // a district in focus: its own neighbourhoods are the bright dots — say how many
               <span className="gc-hint">{grain === 'dong' && focus.level === 'gu'
-                ? `${places.filter((p) => p.guCode === focus.gu.code && plot.at.has(p.code)).length} in ${focus.gu.name} · of ${plot.n} neighbourhoods`
-                : `${plot.n} ${grain === 'dong' ? 'neighbourhoods' : 'districts'} · hover a dot, click to focus`}</span>
+                ? `${places.filter((p) => p.guCode === focus.gu.code && plot.at.has(p.code)).length} in ${focus.gu.name} · of ${plot.n} neighborhoods`
+                : `${plot.n} ${grain === 'dong' ? 'neighborhoods' : 'districts'} · hover a dot, click to focus`}</span>
             )}
           </div>
         </>

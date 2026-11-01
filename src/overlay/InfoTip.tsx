@@ -5,7 +5,7 @@ import type {Variable} from '../data/catalog';
 import {uiZoom} from './uiScale';
 
 const GRAIN: Record<Variable['dataset'], string> = {
-  dong: 'Neighbourhood · static', gu_daily: 'District · daily', dong_daily: 'Neighbourhood · daily'
+  dong: 'Neighborhood · static', gu_daily: 'District · daily', dong_daily: 'Neighborhood · daily'
 };
 const POP_W = 260;
 

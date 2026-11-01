@@ -11,6 +11,8 @@ import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from 
 import InfoTip from './InfoTip';
 import PlaceSentence from './PlaceSentence';
 import RangeFilter from './RangeFilter';
+import VarPicker from './VarPicker';
+import {uiZoom} from './uiScale';
 import {placeSeries} from './scatter';
 import type {Ranges} from './ourFilters';
 
@@ -19,9 +21,11 @@ const DAY = 86400000;
 
 type Props = {data: UhusData; focus: Focus; onSeoul: () => void; onGu: (g: Place) => void; onDong: (d: Place) => void;
   grain: Grain; onGrain: (g: Grain) => void; selection: string[]; linked: boolean; pairable: boolean; onLink: () => void;
-  ranges: Ranges; onRange: (key: string, range: [number, number] | null) => void};
+  ranges: Ranges; onRange: (key: string, range: [number, number] | null) => void;
+  onSelect: (key: string, as: 'main' | 'link') => void};
 
-export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, onGrain, selection, linked, pairable, onLink, ranges, onRange}: Props) {
+export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, onGrain, selection, linked, pairable, onLink, ranges, onRange,
+  onSelect}: Props) {
   const dispatch = useDispatch();
   const kepler = useKepler();
   const visState = kepler?.visState;
@@ -41,6 +45,23 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
   // places pass both, at this grain (and, for a daily variable, on the playing day) — within
   // the district in focus when neighbourhoods are mapped, else across Seoul. Its bars too.
   const [filterOpen, setFilterOpen] = useState<Record<string, boolean>>({});
+  // A card's name picks another variable for its place on the map — the main's card the
+  // main, the second's the second — and "+ Compare with…" links one when there is only a
+  // main. One selection: the drawer's marks and the map follow.
+  const [picking, setPicking] = useState<{slot: 'main' | 'link'; left: number; top: number} | null>(null);
+  const openPicker = (slot: 'main' | 'link') => (e: React.MouseEvent<HTMLElement>) => {
+    if (picking?.slot === slot) { setPicking(null); return; }
+    const r = e.currentTarget.getBoundingClientRect(), z = uiZoom();
+    setPicking({slot, left: r.left / z, top: (r.bottom + 8) / z});
+  };
+  const pickVar = (key: string) => {
+    const slot = picking?.slot;
+    setPicking(null);
+    if (!slot || key === selection[slot === 'main' ? 0 : 1]) return;
+    // the second picked as the main swaps them, and so does the main picked as the second
+    if (slot === 'link' && key === selection[0]) onSelect(selection[1], 'main');
+    else onSelect(key, slot);
+  };
   const anyFilter = Object.keys(ranges).length > 0 || Object.values(filterOpen).some(Boolean);
   const scopeGu = grain === 'dong' && focus.level !== 'seoul' ? focus.gu : null;
   const scopeDongs = useMemo(() => scopeGu ? new Set(data.dongs.filter((d) => d.guCode === scopeGu.code).map((d) => d.code)) : null,
@@ -97,7 +118,7 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
           // side by side, each card says which half of the split map is its own
           const half = splitMaps.findIndex((m: any) => m.layers?.[layer.id]);
           const role = bivariate ? (pairPart === 'a' ? '↑ grid rows' : 'grid columns →')
-            : height ? 'height' : size ? 'circle size' : pairPart === 'a' ? 'colour' : splitMaps.length && half >= 0 ? (half === 0 ? '◧ left map' : 'right map ◨') : null;
+            : height ? 'height' : size ? 'circle size' : pairPart === 'a' ? 'color' : splitMaps.length && half >= 0 ? (half === 0 ? '◧ left map' : 'right map ◨') : null;
           // Daily data exists per district only: at neighbourhood focus the value shown
           // is the district's, and the card has to say so rather than pass it off as local.
           const coarser = focus.level === 'dong' && !(source?.id ?? layer.config.dataId).startsWith('dong');
@@ -132,7 +153,11 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                 )}
               </div>
               <div className="lc-row">
-                <span className="lc-name" title={recoloured ? `Colour set to ${x.short} in map settings (was ${sel.short})` : undefined}>{x.long ?? x.short}</span>
+                <button className={`lc-name lc-pick${picking?.slot === (sel.key === selection[0] ? 'main' : 'link') ? ' open' : ''}`}
+                  aria-haspopup="listbox" onClick={openPicker(sel.key === selection[0] ? 'main' : 'link')}
+                  title={recoloured ? `Color set to ${x.short} in map settings (was ${sel.short}) — click for another variable` : 'Another variable here'}>
+                  {x.long ?? x.short}
+                </button>
                 {VAR_BY_KEY[x.key] && <InfoTip x={x} />}
                 <button className={`lc-filter${ranges[x.key] ? ' on' : ''}${filterOpen[x.key] ? ' open' : ''}`}
                   title={ranges[x.key] ? 'Filtered — click to edit' : 'Filter places by this value'} aria-pressed={!!ranges[x.key]}
@@ -174,7 +199,15 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
           );
         })}
         {onMap.length === 0 && <p className="empty-note">Nothing on the map. Open the bar below and turn a variable on.</p>}
+        {selection.length === 1 && onMap.length > 0 && (
+          <button className={`lc-compare${picking?.slot === 'link' ? ' open' : ''}`} onClick={openPicker('link')}>＋ Compare with…</button>
+        )}
       </div>
+      {picking && (
+        <VarPicker left={picking.left} top={picking.top} current={selection[picking.slot === 'main' ? 0 : 1] ?? null} onMap={selection}
+          onPick={pickVar} onClose={() => setPicking(null)}
+          clear={picking.slot === 'link' && selection[1] ? {label: '✕  No comparison', onClick: () => { setPicking(null); onSelect(selection[1], 'link'); }} : undefined} />
+      )}
     </section>
   );
 }

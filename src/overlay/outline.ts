@@ -32,7 +32,7 @@ export function showDongOutline(dispatch: Dispatch, visState: any, data: UhusDat
     datasets: [{
       info: {id: OUTLINE_DATA_ID, label: labelOf(guCode)},
       data: {fields: [
-        {name: 'dong_name', type: 'string', format: '', analyzerType: 'STRING', displayName: 'Neighbourhood'},
+        {name: 'dong_name', type: 'string', format: '', analyzerType: 'STRING', displayName: 'Neighborhood'},
         {name: 'gu_name', type: 'string', format: '', analyzerType: 'STRING', displayName: 'District'},
         {name: '_geojson', type: 'geojson', format: '', analyzerType: 'GEOMETRY', displayName: 'Geometry'},
       ], rows},

@@ -28,15 +28,15 @@ const METRO: Link = {label: 'Seoul Metro station addresses', url: 'https://data.
 export const ROLES: {role: DataSource['role']; sub: string}[] = [
   {role: 'Inputs', sub: 'the raw signals'},
   {role: 'Outcome', sub: 'what the study measures'},
-  {role: 'Explanation', sub: 'why it varies between neighbourhoods'},
+  {role: 'Explanation', sub: 'why it varies between neighborhoods'},
   {role: 'Base', sub: 'what everything is joined on'},
 ];
 
 export const SOURCES: DataSource[] = [
   {
     id: 'weather', role: 'Inputs', title: 'Daily Weather', file: 'Daily_Weather.csv', kind: 'public',
-    description: 'Daily weather for every neighbourhood across 2024 — the heat exposure the study compares sales against.',
-    how: 'Maximum temperature, maximum humidity and precipitation are KMA observations summarised per dong and day. ' +
+    description: 'Daily weather for every neighborhood across 2024 — the heat exposure the study compares sales against.',
+    how: 'Maximum temperature, maximum humidity and precipitation are KMA observations summarized per dong and day. ' +
       'Apparent maximum temperature is computed with the KMA summer apparent-temperature formula. A day is hot when it ' +
       'reaches 33 °C apparent; mild when it stays within 18–26 °C, with no rain and not a public holiday.',
     space: 'Dong · 422', time: 'Day · 366 (2024)', source: 'Korea Meteorological Administration (KMA)',
@@ -44,7 +44,7 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'sales', role: 'Inputs', title: 'Sales Signal', file: 'sales.csv', kind: 'restricted',
-    description: 'Daily card-sales amounts across 84 industries per neighbourhood — the behavioural signal behind ' +
+    description: 'Daily card-sales amounts across 84 industries per neighborhood — the behavioral signal behind ' +
       'retail heat sensitivity. Provided to the project by the Seoul AI Foundation; not openly available.',
     how: 'Retail sales sum the 19 retail industries used for RHSI. The six themed totals group all industries into food & ' +
       'beverage; retail & daily goods; fashion & beauty; health, education & culture; leisure, mobility & lodging; and ' +
@@ -55,7 +55,7 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'rhsi', role: 'Outcome', title: 'Retail Heat Sensitivity (RHSI)', file: 'RHSI.csv', kind: 'project',
-    description: 'How much a neighbourhood’s retail sales change on hot days — the study’s main output. Below zero, ' +
+    description: 'How much a neighborhood’s retail sales change on hot days — the study’s main output. Below zero, ' +
       'sales fall in the heat.',
     how: 'RHSI = log(mean daily retail sales on hot days ÷ mean daily retail sales on mild days), per dong, with the hot ' +
       'and mild days counted alongside.',
@@ -64,7 +64,7 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'context', role: 'Explanation', title: 'Urban Context', file: 'Urban_Features.csv', kind: 'project',
-    description: 'Who lives in a neighbourhood and what it is built of — demography, land use, housing age, activity ' +
+    description: 'Who lives in a neighborhood and what it is built of — demography, land use, housing age, activity ' +
       'venues and land price — the context that helps explain RHSI.',
     how: 'Each variable is a share of the dong’s population or area, a count per km², or (land price) the log of the mean ' +
       'official land price, built from the public sources below.',
@@ -76,7 +76,7 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'mobility', role: 'Explanation', title: 'Mobility', file: 'Urban_Features.csv', kind: 'project',
-    description: 'How people move and how reachable a neighbourhood is — the daytime population’s response to heat is ' +
+    description: 'How people move and how reachable a neighborhood is — the daytime population’s response to heat is ' +
       'the strongest single driver of RHSI.',
     how: 'Day/night population ratio; the log-ratio of daytime population on hot vs mild days; the share of the dong ' +
       'within reach of a subway station; bus stops and parking spaces per km².',
@@ -86,7 +86,7 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'salesmix', role: 'Explanation', title: 'Sales Composition', file: 'Urban_Features.csv', kind: 'project',
-    description: 'The retail make-up of a neighbourhood: how much of its card spending goes to retail, dining, everyday ' +
+    description: 'The retail make-up of a neighborhood: how much of its card spending goes to retail, dining, everyday ' +
       'shops, general and large-format stores.',
     how: 'Each sector’s card-sales amount ÷ the dong’s total card-sales amount over 2024; the “(retail)” versions divide ' +
       'by its retail card sales instead.',
@@ -96,16 +96,16 @@ export const SOURCES: DataSource[] = [
   },
   {
     id: 'shap', role: 'Explanation', title: 'SHAP Contributions', file: 'shap_result.csv', kind: 'project',
-    description: 'For each neighbourhood, how much each model input pushed its predicted RHSI up or down. It explains ' +
-      'the model’s behaviour, not cause and effect.',
-    how: 'SHAP values of a model predicting RHSI from 25 neighbourhood features: the model’s RHSI for a dong is a base ' +
+    description: 'For each neighborhood, how much each model input pushed its predicted RHSI up or down. It explains ' +
+      'the model’s behavior, not cause and effect.',
+    how: 'SHAP values of a model predicting RHSI from 25 neighborhood features: the model’s RHSI for a dong is a base ' +
       'value plus its 25 contributions. All 25 are mapped, in RHSI’s folder.',
     space: 'Dong · 422', time: 'Static', source: 'UHUS model output',
     vars: VARIABLES.filter((x) => x.key.startsWith('shap_')).map((x) => x.key),
   },
   {
     id: 'geometry', role: 'Base', title: 'Dong Boundaries', file: 'Administrative_Dong_Geometry.geojson', kind: 'public',
-    description: 'The 422 administrative neighbourhood (dong) boundaries every variable is mapped and joined on; the 25 ' +
+    description: 'The 422 administrative neighborhood (dong) boundaries every variable is mapped and joined on; the 25 ' +
       'districts (gu) are their union.',
     how: 'Simplified for the web; dong codes join every dataset above.',
     space: 'Dong · 422 / Gu · 25', time: 'Static', source: 'Seoul Open Data Plaza', vars: [], links: [SEOUL],

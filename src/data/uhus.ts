@@ -94,7 +94,7 @@ function keepAsReal<T extends {fields: any[]; rows: any[][]}>(data: T, names: st
 // their catalog name; the place columns are what kepler's users would call them, so its
 // own tools read "District" and "Neighbourhood" instead of gu_name and dong_code.
 const COLUMN_NAMES: Record<string, string> = {
-  gu_name: 'District', gu_code: 'District code', dong_name: 'Neighbourhood', dong_code: 'Neighbourhood code',
+  gu_name: 'District', gu_code: 'District code', dong_name: 'Neighborhood', dong_code: 'Neighborhood code',
   date: 'Date', lat: 'Latitude', lng: 'Longitude', h3: 'H3 cell', _geojson: 'Geometry',
   is_hot: 'Heat day', is_mild: 'Mild day'
 };

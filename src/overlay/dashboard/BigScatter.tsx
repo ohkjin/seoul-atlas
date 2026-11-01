@@ -99,7 +99,7 @@ function Histogram({ctx}: {ctx: DashCtx}) {
         <line className="hg-median" x1={x(median)} x2={x(median)} y1={P.t} y2={H - P.b} />
         <text className="gc-tick" x={x(median) + 4} y={P.t + 8}>median {fmt(median)}</text>
         <text className="gc-axis" x={W - P.r} y={H - 1} textAnchor="end">{x0.short} →</text>
-        <text className="gc-axis" x={P.l} y={1} dominantBaseline="hanging">↑ {grain === 'dong' ? 'Neighbourhoods' : 'Districts'}</text>
+        <text className="gc-axis" x={P.l} y={1} dominantBaseline="hanging">↑ {grain === 'dong' ? 'Neighborhoods' : 'Districts'}</text>
       </svg>
       <div className="gc-caption">
         {shown != null

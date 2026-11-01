@@ -19,7 +19,7 @@ export default function StatusBar({selection}: {selection: string[]}) {
 
   return (
     <footer className="status-bar">
-      <div className="sb-num"><span className="sb-lbl">{cursor ? 'Cursor' : 'Centre'}</span>
+      <div className="sb-num"><span className="sb-lbl">{cursor ? 'Cursor' : 'Center'}</span>
         {lat.toFixed(4)}°N&nbsp;&nbsp;{lng.toFixed(4)}°E</div>
       <div className="sb-num"><span className="sb-lbl">Zoom</span>{(m?.zoom ?? 0).toFixed(1)}</div>
       <div className="sb-num" title="Map bearing — the compass direction at the top of the screen">

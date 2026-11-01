@@ -2,6 +2,7 @@ import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {INDUSTRY_KEYS, SALES_GROUP_KEYS, VAR_BY_KEY, childrenOf} from '../../data/catalog';
 import {industrySeries, isIndustry, loadIndustries} from '../../data/industries';
 import {seriesByDay} from '../focusValues';
+import {niceTicks} from '../scatter';
 import type {DashCtx} from './Dashboard';
 
 // Sales — the year, and the heat. When sales lead the selection, the dashboard's wide panel
@@ -39,14 +40,19 @@ function partsOf(key: string): {parts: string[]; head: string; industries: strin
 }
 
 // one year as SVG: heat days as red columns, mild days as blue ticks along the foot, the
-// daily line faint under its 7-day mean; the 2nd–98th percentile of the days fills the height
-function Year({W, vals, hot, mild, y0, h, name, change, big, marked, today}: {W: number; vals: number[]; hot: boolean[]; mild: boolean[];
-  y0: number; h: number; name: string; change?: number; big?: boolean; marked?: boolean; today?: number}) {
+// daily line faint under its 7-day mean; the 2nd–98th percentile of the days fills the height.
+// The weather panel draws its own years with it too: Seoul's line dashed under the place's
+// (seoul), rain as bars from zero (bars), its own words at the right end (note) and, for the
+// large year, its values along the right edge in their unit (axis).
+export function Year({W, vals, hot, mild, y0, h, name, change, note, seoul, bars, axis, big, marked, today}: {W: number; vals: number[];
+  hot: boolean[]; mild: boolean[]; y0: number; h: number; name: string; change?: number; note?: {text: string; cls: string};
+  seoul?: number[]; bars?: boolean; axis?: string; big?: boolean; marked?: boolean; today?: number}) {
   const n = vals.length, X = (i: number) => (i / (n - 1)) * W;
   const q = vals.filter(Number.isFinite).sort((a, b) => a - b);
-  const lo = q[Math.floor(q.length * 0.02)] ?? 0, hi = q[Math.floor(q.length * 0.98)] ?? 1;
+  const lo = bars ? 0 : q[Math.floor(q.length * 0.02)] ?? 0, hi = q[Math.floor(q.length * 0.98)] ?? 1;
   const top = big ? 22 : 18, Y = (v: number) => y0 + h - 4 - ((Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo || 1)) * (h - top);
-  const week = vals.map((_, i) => { let s = 0, c = 0; for (let j = i - 3; j <= i + 3; j++) if (Number.isFinite(vals[j])) { s += vals[j]; c++; } return c ? s / c : NaN; });
+  const weekOf = (v: number[]) => v.map((_, i) => { let s = 0, c = 0; for (let j = i - 3; j <= i + 3; j++) if (Number.isFinite(v[j])) { s += v[j]; c++; } return c ? s / c : NaN; });
+  const week = weekOf(vals);
   const line = (v: number[]) => v.map((x, i) => (Number.isFinite(x) ? `${X(i).toFixed(1)},${Y(x).toFixed(1)}` : '')).filter(Boolean).join(' ');
   const mean = (m: boolean[]) => { let s = 0, c = 0; vals.forEach((x, i) => { if (m[i] && Number.isFinite(x)) { s += x; c++; } }); return c ? s / c : NaN; };
   const cw = Math.max(1.4, W / n);
@@ -55,28 +61,36 @@ function Year({W, vals, hot, mild, y0, h, name, change, big, marked, today}: {W:
       {hot.map((b, i) => (b ? <rect key={i} className="sp-heat" x={X(i) - cw / 2} y={y0} width={cw} height={h} /> : null))}
       {mild.map((b, i) => (b ? <rect key={i} className="sp-mild" x={X(i)} y={y0 + h - 2} width={1.4} height={2} /> : null))}
       <line className="sp-base" x1={0} x2={W} y1={y0 + h} y2={y0 + h} />
-      <polyline className="sp-day" points={line(vals)} />
-      <polyline className={`sp-week${big ? ' big' : ''}`} points={line(week)} />
-      {big && [['mild', mean(mild)], ['hot', mean(hot)]].map(([k, m]) => Number.isFinite(m)
+      {axis != null && niceTicks(lo, hi, false, 4).map((t) => (
+        <g key={`t${t}`}><line className="sp-grid" x1={0} x2={W} y1={Y(t)} y2={Y(t)} />
+          <text className="sp-month" x={W} y={Y(t) - 3} textAnchor="end">{t}{axis}</text></g>
+      ))}
+      {seoul && !bars && <polyline className="sp-seoul" points={line(weekOf(seoul))} />}
+      {bars
+        ? vals.map((v, i) => (v > 0 ? <rect key={`r${i}`} className="sp-rain" fill="#d9dee6" x={X(i) - 0.6} y={Y(v)} width={1.2} height={y0 + h - 4 - Y(v)} /> : null))
+        : <>
+          <polyline className="sp-day" points={line(vals)} />
+          <polyline className={`sp-week${big ? ' big' : ''}`} points={line(week)} />
+        </>}
+      {big && !seoul && [['mild', mean(mild)], ['hot', mean(hot)]].map(([k, m]) => Number.isFinite(m)
         ? <line key={k} className={`sp-mean ${k}`} x1={0} x2={W} y1={Y(m as number)} y2={Y(m as number)} /> : null)}
       {today != null && today >= 0 && today < n && <line className="sp-today" x1={X(today)} x2={X(today)} y1={y0} y2={y0 + h} />}
       <text className={`sp-name${big ? ' big' : ''}${marked ? ' marked' : ''}`} x={0} y={y0 + 11}>{name}</text>
       {change !== undefined && <text className={`sp-chg ${tone(change)}`} x={W} y={y0 + 11} textAnchor="end">{pct(change)}</text>}
+      {note && <text className={`sp-chg ${note.cls}`} x={W} y={y0 + 11} textAnchor="end">{note.text}</text>}
     </g>
   );
 }
 
-function Months({W, y}: {W: number; y: number}) {
+export function Months({W, y}: {W: number; y: number}) {
   return <>{'JFMAMJJASOND'.split('').map((m, k) => (
     <text key={k} className="sp-month" x={((Date.UTC(2024, k, 1) - Date.UTC(2024, 0, 1)) / DAY / 365) * W + 2} y={y}>{m}</text>
   ))}</>;
 }
 
-export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey: string}) {
-  const {focus, grain, datasets, day} = ctx;
-  const {parts, head, industries} = partsOf(key);
-
-  // the charts' column width, measured from the grid cell that holds the large year
+// a column's width in pixels, measured as it changes, so the years are drawn at their size
+// and the text in them stays its size
+export function useColumnWidth() {
   const [W, setW] = useState(640);
   const ro = useRef<ResizeObserver | null>(null);
   const measure = useCallback((el: HTMLDivElement | null) => {
@@ -85,7 +99,15 @@ export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey
     ro.current = new ResizeObserver(() => { const w = Math.round(el.clientWidth); if (w > 200) setW((cur) => (Math.abs(cur - w) > 2 ? w : cur)); });
     ro.current.observe(el);
   }, []);
+  return [W, measure] as const;
+}
 
+export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey: string}) {
+  const {focus, grain, datasets, day} = ctx;
+  const {parts, head, industries} = partsOf(key);
+
+  // the charts' column width, measured from the grid cell that holds the large year
+  const [W, measure] = useColumnWidth();
 
   // the focused place, read where its rows are: its own dong where loaded, else its district
   const byDong = focus.level === 'dong' && grain === 'dong' && !!datasets?.dong_daily;
@@ -186,7 +208,7 @@ export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey
             <span className="hot"><i className="sp-dash hot" />heat day {won(own.hot)}</span>
             <span className="mild"><i className="sp-dash mild" />mild day {won(own.mild)}</span>
           </p>
-          {words && <p>a typical Seoul neighbourhood: <b className={tone(words.typical)}>{pct(words.typical)}</b></p>}
+          {words && <p>a typical Seoul neighborhood: <b className={tone(words.typical)}>{pct(words.typical)}</b></p>}
           <p className="dim">{nHot} heat days · {nMild} mild days in 2024</p>
         </div>
       </div>

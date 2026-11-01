@@ -14,9 +14,9 @@ import type {DashCtx} from './Dashboard';
 const W = 940;
 const FOLD = 0.01;                    // groups pushing less than this fold into "Other" in the waterfall
 
-type Table = {codes: string[]; names: string[]; gus: string[]; col: (key: string) => number[]};
+export type Table = {codes: string[]; names: string[]; gus: string[]; col: (key: string) => number[]};
 
-function readDongs(datasets: any): Table | null {
+export function readDongs(datasets: any): Table | null {
   const d = datasets?.dong;
   if (!d) return null;
   const n = d.dataContainer.numRows();
@@ -40,14 +40,14 @@ export default function ShapPanel({ctx}: {ctx: DashCtx}) {
     if (focus.level === 'dong') return [table.codes.indexOf(focus.dong.code)].filter((i) => i >= 0);
     return table.gus.map((g, i) => (g === focus.gu.code ? i : -1)).filter((i) => i >= 0);
   }, [table, focus]);
-  if (!table) return <p className="dash-empty">Loading the neighbourhoods…</p>;
+  if (!table) return <p className="dash-empty">Loading the neighborhoods…</p>;
   const place = focus.level === 'seoul' ? null : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
   return (
     <div className="shap">
       {members?.length && place
         ? <Waterfall table={table} members={members} place={place} isGu={focus.level === 'gu'} />
-        : <p className="shap-sum">Focus a neighbourhood or a district to see why its RHSI is what it is.</p>}
-      <h3 className="shap-sub">All neighbourhoods — what each input does to RHSI, by group</h3>
+        : <p className="shap-sum">Focus a neighborhood or a district to see why its RHSI is what it is.</p>}
+      <h3 className="shap-sub">All neighborhoods — what each input does to RHSI, by group</h3>
       <Beeswarm table={table} members={members} onPick={(code) => onPick('dong', code)} />
     </div>
   );
@@ -97,7 +97,7 @@ function Waterfall({table, members, place, isGu}: {table: Table; members: number
           <g key={t}><line className={t === 0 ? 'wf-zero' : 'wf-grid'} x1={x(t)} x2={x(t)} y1={0} y2={H - 20} />
             <text className="wf-tick" x={x(t)} y={H - 6} textAnchor="middle">{signed(t, 2)}</text></g>
         ))}
-        {bar(0, 'Seoul average', 'mean of 422 neighbourhoods', 0, base, 'base', signed(base), asPct(base))}
+        {bar(0, 'Seoul average', 'mean of 422 neighborhoods', 0, base, 'base', signed(base), asPct(base))}
         {steps.map((s, i) => {
           const from = c; c += s.v;
           return (
@@ -108,7 +108,7 @@ function Waterfall({table, members, place, isGu}: {table: Table; members: number
           );
         })}
         <line className="wf-link" x1={x(c)} x2={x(c)} y1={steps.length * RH + 31} y2={(steps.length + 1) * RH + 9} />
-        {bar(steps.length + 1, place, isGu ? 'model, mean of its neighbourhoods' : 'model estimate', 0, end, 'end', signed(end), asPct(end))}
+        {bar(steps.length + 1, place, isGu ? 'model, mean of its neighborhoods' : 'model estimate', 0, end, 'end', signed(end), asPct(end))}
       </svg>
       {top && <p className="wf-say">The biggest reason is <b>{top.label} ({signed(top.v)})</b>
         {top.top && Math.abs(top.top.v) >= Math.abs(top.v) / 2 ? <> — mostly <b>{VAR_BY_KEY[top.top.k]?.full?.toLowerCase() ?? top.top.k} ({signed(top.top.v)})</b></> : null}.</p>}
@@ -226,7 +226,7 @@ function Beeswarm({table, members, onPick}: {table: Table; members: number[] | n
   const H = y, gx = W - KEY + 14, kh = Math.min(160, H - 24);
   return (
     <>
-      <svg className="shap-svg" viewBox={`0 0 ${W} ${H + 40}`} role="img" aria-label="SHAP contributions by group, every neighbourhood">
+      <svg className="shap-svg" viewBox={`0 0 ${W} ${H + 40}`} role="img" aria-label="SHAP contributions by group, every neighborhood">
         <line className="shap-zero" x1={X(0)} x2={X(0)} y1={0} y2={H} />
         {parts}
         {niceTicks(lo, hi, false, 6).map((t) => <text key={t} className="shap-axis" x={X(t)} y={H + 14} textAnchor="middle">{signed(t, 2)}</text>)}
@@ -238,7 +238,7 @@ function Beeswarm({table, members, onPick}: {table: Table; members: number[] | n
         <text className="shap-axis" x={gx + 13} y={12 + kh}>Low</text>
         <text className="shap-axis" x={gx + 34} y={12 + kh / 2} textAnchor="middle" transform={`rotate(-90 ${gx + 34} ${12 + kh / 2})`}>Input value</text>
       </svg>
-      <div className="shap-legend"><span>dot = a neighbourhood · a group's row is the sum of its inputs (grey) · click a group to open or fold it</span>
+      <div className="shap-legend"><span>dot = a neighborhood · a group's row is the sum of its inputs (gray) · click a group to open or fold it</span>
         {members?.length ? <span><i className="shap-ring-key" /> the focused place, its value at the right</span> : null}</div>
     </>
   );

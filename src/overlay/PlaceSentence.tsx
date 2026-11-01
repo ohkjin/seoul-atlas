@@ -44,14 +44,14 @@ export default function PlaceSentence({data, focus, grain, onSeoul, onGu, onDong
     <button className={`sentence-word${open?.list === list ? ' open' : ''}`} aria-haspopup="listbox"
       aria-expanded={open?.list === list} onClick={toggle(list)}>{text}</button>
   );
-  const unit = grain === 'dong' ? 'neighbourhood' : 'district';
+  const unit = grain === 'dong' ? 'neighborhood' : 'district';
   const pick = (go: () => void) => () => { setOpen(null); go(); };
 
   return (
     <p className="sentence">
       {!gu ? <>All of Seoul — {word('gus', `${data.gus.length} districts`)}, mapped by {word('grain', unit)}.</>
         : dong ? <>{word('dongs', dong.name)}, in {word('gus', gu.name)}, mapped by {word('grain', unit)}.</>
-        : <>{word('gus', gu.name)} — {word('dongs', `${dongsInGu.length} neighbourhoods`)}, mapped by {word('grain', unit)}.</>}
+        : <>{word('gus', gu.name)} — {word('dongs', `${dongsInGu.length} neighborhoods`)}, mapped by {word('grain', unit)}.</>}
       {open && createPortal(
         <div ref={pop} className="place-pop" role="listbox" style={{left: open.left, top: open.top}}>
           {open.list === 'gus' && (
@@ -72,7 +72,7 @@ export default function PlaceSentence({data, focus, grain, onSeoul, onGu, onDong
               <div className="pp-grid one">
                 {(['gu', 'dong'] as Grain[]).map((g) => (
                   <button key={g} className={grain === g ? 'on' : ''} onClick={pick(() => onGrain(g))}>
-                    {g === 'gu' ? 'District' : 'Neighbourhood'}<small>{g === 'gu' ? data.gus.length : data.dongs.length} areas</small>
+                    {g === 'gu' ? 'District' : 'Neighborhood'}<small>{g === 'gu' ? data.gus.length : data.dongs.length} areas</small>
                   </button>
                 ))}
               </div>

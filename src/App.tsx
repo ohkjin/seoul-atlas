@@ -36,7 +36,7 @@ export default function App() {
             {info: {id: 'dong', label: 'Dong'}, data: d.dong},
             {info: {id: 'gu', label: 'Gu'}, data: d.gu},
             {info: {id: 'gu_daily', label: 'Gu · daily'}, data: d.guDaily},
-            {info: {id: 'dong_cells', label: '3D cells · neighbourhoods'}, data: d.dongCells},
+            {info: {id: 'dong_cells', label: '3D cells · neighborhoods'}, data: d.dongCells},
             {info: {id: 'gu_cells', label: '3D cells · districts'}, data: d.guCells}
           ],
           options: {centerMap: false, readOnly: false},

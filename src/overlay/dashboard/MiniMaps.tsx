@@ -64,7 +64,7 @@ export default function MiniMaps({ctx}: {ctx: DashCtx}) {
         <Profile vars={themeVars} series={series} place={focused.length === 1 ? places.find((p) => p.code === focused[0]) : undefined} grain={grain} />
       </div>
       <div className="mm-ramp">low {RAMP.map((c) => <i key={c} style={{background: c}} />)} high
-        <span> · fifths of the {places.length} {grain === 'dong' ? 'neighbourhoods' : 'districts'}, per map</span></div>
+        <span> · fifths of the {places.length} {grain === 'dong' ? 'neighborhoods' : 'districts'}, per map</span></div>
     </>
   );
 }
@@ -73,7 +73,7 @@ export default function MiniMaps({ctx}: {ctx: DashCtx}) {
 // of its width: a dot along its peers from lowest to highest, the median in the middle, its value and
 // its share from the top or the bottom. Rows of HTML, so the type keeps its size in a narrow cell.
 function Profile({vars, series, place, grain}: {vars: Variable[]; series: Map<string, number>[]; place: Place | undefined; grain: Grain}) {
-  if (!place) return <div className="mm-profile hint">Focus a {grain === 'dong' ? 'neighbourhood' : 'district'} to see its profile here.</div>;
+  if (!place) return <div className="mm-profile hint">Focus a {grain === 'dong' ? 'neighborhood' : 'district'} to see its profile here.</div>;
   const rows = vars.map((v, i) => {
     const vals = [...(series[i]?.values() ?? [])], at = series[i]?.get(place.code);
     if (at == null || vals.length < 2) return null;
@@ -97,7 +97,7 @@ function Profile({vars, series, place, grain}: {vars: Variable[]; series: Map<st
 }
 
 // a value as people read it: shares in %, a logged price back in won, else the number and its unit
-function profileValue(v: Variable, x: number) {
+export function profileValue(v: Variable, x: number) {
   if (v.unit === 'ratio') return `${(x * 100).toFixed(0)}%`;
   if (v.unit.startsWith('log KRW')) return `₩${(Math.exp(x) / 1e6).toFixed(1)}M/m²`;
   return `${fmt(x)}${v.unit.startsWith('per ') ? `/${v.unit.slice(4)}` : ` ${v.unit}`}`;

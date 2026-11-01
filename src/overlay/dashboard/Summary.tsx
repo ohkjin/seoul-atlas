@@ -21,7 +21,7 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
   const places: Place[] = level === 'dong' ? data.dongs : data.gus;
   const code = focus.level === 'seoul' ? null : focus.level === 'dong' ? focus.dong.code : focus.gu.code;
   const placeName = focus.level === 'seoul' ? 'Seoul' : focus.level === 'dong' ? focus.dong.name : focus.gu.name;
-  const peerNoun = level === 'dong' ? 'neighbourhood' : 'district';
+  const peerNoun = level === 'dong' ? 'neighborhood' : 'district';
 
   // the tiles: the linked variables, then heat sensitivity and heat days — four at most
   const tileVars = useMemo(() => {

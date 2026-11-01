@@ -13,6 +13,9 @@ import Ranking from './Ranking';
 import MiniMaps from './MiniMaps';
 import ShapPanel from './ShapPanel';
 import SalesPanel, {isSalesKey} from './SalesPanel';
+import WeatherPanel, {isWeatherKey} from './WeatherPanel';
+import EffectPanel, {isInputKey} from './EffectPanel';
+import DistrictPanel from './DistrictPanel';
 import {uiZoom} from '../uiScale';
 import {useWindowFrame, type Grip} from '../useWindowFrame';
 import Summary from './Summary';
@@ -30,7 +33,8 @@ export type DashCtx = Props & {vars: Variable[]; places: Place[]; series: Map<st
 // selection and focus as the map, each a half of the window: the scatter; the heat response
 // of the focused place; every place in order with the ten highest and lowest; the whole
 // theme as maps with the place's profile; then for what is on the map, sales, their year
-// and the heat (SalesPanel); RHSI or SHAP, what drives it. Any panel expands to fill the
+// and the heat (SalesPanel); RHSI or SHAP, what drives it; daily weather, its year; a model
+// input, what it does to RHSI; anything else, its neighbourhoods by district. Any panel expands to fill the
 // window (its button, or a double-click on its name; Esc restores). Clicking a place in any
 // of them focuses the map there.
 const MIN = {w: 560, h: 380};
@@ -53,12 +57,14 @@ export default function Dashboard(props: Props) {
   const entries = visState ? selectionEntries(visState, selection, linked, grain, is3d) : [];
   const ctx: DashCtx = {...props, vars, places, series, datasets, filters, day, entries};
 
-  // first opened: as large as the screen allows (up to 1080×840) at the right, below the
-  // top bar; after that, where it was left
-  const win = useWindowFrame('seoul-atlas.dashboard', () => {
+  // First opened: the rest of the screen beside the place panel and below the search —
+  // neither the place's name nor the search covered; after that, where it was left. (A new
+  // key, so a place remembered from the earlier default does not hide this one.)
+  const win = useWindowFrame('seoul-atlas.dashboard.v2', () => {
     const z = uiZoom(), W = window.innerWidth / z, H = window.innerHeight / z;
-    return {ax: 'right', x: 16, ay: 'top', y: 76, w: Math.max(Math.min(1080, W - 32), W * 0.72),
-      h: Math.max(Math.min(840, H - 84), H - 110)};
+    const edge = (sel: string, side: 'right' | 'bottom') => (document.querySelector(sel)?.getBoundingClientRect()[side] ?? 0) / z;
+    const left = Math.max(104, edge('section.focus', 'right') + 12), top = Math.max(76, edge('.search', 'bottom') + 12);
+    return {ax: 'right', x: 16, ay: 'top', y: top, w: W - 16 - left, h: H - top - 16};
   }, MIN);
   // the panels are halves of the grid's visible height (--grid-h in styles.css), and an
   // expanded one all of it
@@ -95,20 +101,33 @@ export default function Dashboard(props: Props) {
 
   const placeName = focus.level === 'seoul' ? 'Seoul' : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
   // The last panels follow what is on the map, the main's first: sales bring their year
-  // (SalesPanel), RHSI or a SHAP contribution its drivers (ShapPanel); anything else, neither.
-  const wide = vars.map((x) => isSalesKey(x.key) ? {kind: 'sales', key: x.key}
-    : x.key === 'RHSI_retail' || x.key.startsWith('shap_') ? {kind: 'shap', key: x.key} : null)
-    .filter((w, i, a): w is {kind: string; key: string} => !!w && a.findIndex((v) => v?.kind === w.kind) === i);
+  // (SalesPanel), RHSI or a SHAP contribution its drivers (ShapPanel), daily weather its year
+  // in the same frame (WeatherPanel), one of the model's inputs what it does to RHSI
+  // (EffectPanel), anything else its neighbourhoods by district (DistrictPanel). One of a kind.
+  const wide = vars.map((x) => ({key: x.key, kind: isSalesKey(x.key) ? 'sales'
+    : x.key === 'RHSI_retail' || x.key.startsWith('shap_') ? 'shap'
+    : isWeatherKey(x.key) ? 'weather' : isInputKey(x.key) ? 'effect' : x.dataset === 'dong' ? 'district' : null}))
+    .filter((w, i, a): w is {kind: string; key: string} => !!w.kind && a.findIndex((v) => v.kind === w.kind) === i);
+  const name = (key: string) => VAR_BY_KEY[key]?.long ?? VAR_BY_KEY[key]?.short.replace(/ \(daily\)$/, '') ?? key;
+  const widePanel = (w: {kind: string; key: string}) => {
+    switch (w.kind) {
+      case 'sales': return panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />);
+      case 'shap': return panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />);
+      case 'weather': return panel('weather', 'Weather — the year, and the heat', <WeatherPanel ctx={ctx} weatherKey={w.key} />);
+      case 'effect': return panel('effect', `${name(w.key)} — what it does to heat sensitivity`, <EffectPanel ctx={ctx} inputKey={w.key} />);
+      default: return panel('district', `${name(w.key)} — by district`, <DistrictPanel ctx={ctx} varKey={w.key} />);
+    }
+  };
   return (
     <div className={`dash glass${win.held ? ' held' : ''}`} role="dialog" aria-label="Dashboard" style={win.style}>
       <div className="dash-head" onPointerDown={win.grab('move')} onDoubleClick={win.toggleMax}>
         <div>
-          <div className="dash-eyebrow">Dashboard · {grain === 'dong' ? 'neighbourhoods' : 'districts'}</div>
+          <div className="dash-eyebrow">Dashboard · {grain === 'dong' ? 'neighborhoods' : 'districts'}</div>
           <div className="dash-title">{placeName}{vars.length ? ` — ${vars.map((x) => x.long ?? x.short).join(' × ')}` : ''}</div>
         </div>
         <div className="dash-tools">
-          <button className="icon-btn dash-close" aria-label={win.maxed ? 'Restore the dashboard' : 'Maximise the dashboard'}
-            title={win.maxed ? 'Restore (double-click the title bar)' : 'Maximise (double-click the title bar)'} onClick={win.toggleMax}>
+          <button className="icon-btn dash-close" aria-label={win.maxed ? 'Restore the dashboard' : 'Maximize the dashboard'}
+            title={win.maxed ? 'Restore (double-click the title bar)' : 'Maximize (double-click the title bar)'} onClick={win.toggleMax}>
             {win.maxed ? <Minimize2 size={14} strokeWidth={1.75} /> : <Maximize2 size={14} strokeWidth={1.75} />}
           </button>
           <button className="icon-btn dash-close" aria-label="Close the dashboard" title="Close (Esc)" onClick={onClose}>
@@ -122,9 +141,7 @@ export default function Dashboard(props: Props) {
         {panel('heat', 'Heat response', <HeatResponse ctx={ctx} />)}
         {panel('ranking', `Ranking${vars[0] ? ` — ${vars[0].long ?? vars[0].short}` : ''}`, <Ranking ctx={ctx} />)}
         {panel('theme', `${THEMES.find((t) => t.key === vars[0]?.theme)?.label ?? 'Theme'} at a glance`, <MiniMaps ctx={ctx} />)}
-        {wide.map((w) => w.kind === 'sales'
-          ? panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />)
-          : panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />))}
+        {wide.map(widePanel)}
       </div>
       {/* kepler's grips: a move handle centred on the top edge, resize handles on the
           bottom and right edges, and every edge and corner resizable */}

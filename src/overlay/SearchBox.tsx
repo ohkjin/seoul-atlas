@@ -70,11 +70,11 @@ export default function SearchBox({data, selection, onGu, onDong, onVariable}: P
     else if (e.key === 'Escape') { setText(''); setOpen(false); input.current?.blur(); }
   };
 
-  const group = (h: Hit) => (h.kind === 'gu' ? 'Districts' : h.kind === 'dong' ? 'Neighbourhoods' : 'Variables');
+  const group = (h: Hit) => (h.kind === 'gu' ? 'Districts' : h.kind === 'dong' ? 'Neighborhoods' : 'Variables');
   return (
     <div className={`search${open && text ? ' open' : ''}`} role="search">
       <Search size={16} strokeWidth={1.75} className="search-icon" aria-hidden />
-      <input ref={input} value={text} placeholder="Search a district, neighbourhood or variable"
+      <input ref={input} value={text} placeholder="Search a district, neighborhood or variable"
         aria-label="Search the atlas" aria-expanded={open && !!text} aria-controls="search-results"
         onChange={(e) => { setText(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)} onKeyDown={onKey} />
