@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {useDispatch, useStore} from 'react-redux';
 import {setFilter, updateFilterAnimationSpeed} from '@kepler.gl/actions';
 import type {Focus} from './Overlay';
-import {useKepler} from './useKepler';
+import {useVisState} from './useKepler';
 import {VAR_BY_KEY, colorRangeFor, isDivergingRamp, isTemporal} from '../data/catalog';
 import {dataIdFor, type Grain} from './layers';
 import {fmt, numericColumn, rowFilter} from './focusValues';
@@ -36,8 +36,7 @@ type Props = {focus: Focus; selection: string[]; linked: boolean; is3d: boolean;
 export default function TimeCard({focus, selection, linked, is3d, grain, playing, onPlaying, onExpand}: Props) {
   const dispatch = useDispatch();
   const store = useStore<any>();
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  const visState = useVisState();
   const filters = visState?.filters || [];
   const idx = filters.findIndex((f: any) => f.id === 'time');
   const f = filters[idx];

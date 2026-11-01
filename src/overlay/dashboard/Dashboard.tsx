@@ -3,7 +3,7 @@ import {Equal, GripHorizontal, Maximize2, Minimize2, X} from 'lucide-react';
 import {THEMES, VAR_BY_KEY, type Variable} from '../../data/catalog';
 import type {Place, UhusData} from '../../data/uhus';
 import type {Focus} from '../Overlay';
-import {useKepler} from '../useKepler';
+import {useVisState} from '../useKepler';
 import {selectionEntries, type Grain, type OnMap} from '../layers';
 import {placeSeries} from '../scatter';
 import {filtersKey} from '../ourFilters';
@@ -42,8 +42,7 @@ const EDGES: Grip[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
 export default function Dashboard(props: Props) {
   const {data, selection, linked, grain, is3d, focus, onClose} = props;
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  const visState = useVisState();
   const filters = visState?.filters || [];
   const datasets = visState?.datasets;
   const day = Math.ceil((filters.find((f: any) => f.id === 'time')?.value?.[0] ?? 0) / 86400000);

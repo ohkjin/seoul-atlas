@@ -1,13 +1,13 @@
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {X} from 'lucide-react';
-import {useDispatch, useStore} from 'react-redux';
+import {useDispatch, useSelector, useStore} from 'react-redux';
 import {cancelFlight, flyToBounds, flyToView} from './flyTo';
 import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
 import {dailyBase, dailyExtras, isIndustry, joinStatic, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
-import {useKepler} from './useKepler';
+import {useCamera, useVisState} from './useKepler';
 import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
 import {adaptElevation, drawSelection, layersOnMap, planFor, restylePair, setCellView, sync3d, syncOrder, toggleLink, withMain,
   syncTooltip, type Grain} from './layers';
@@ -48,8 +48,11 @@ const initialHeadline = () => Object.fromEntries(THEMES.map((t) => {
 export default function Overlay({data}: {data: UhusData | null}) {
   const dispatch = useDispatch();
   const store = useStore<any>();
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  // not the whole kepler instance: its camera changes every frame of a flight, and this
+  // component re-rendering with it re-rendered every panel (the flight ran at a few frames
+  // a second). The camera is read where it is needed: as of now, or as a value (useCamera).
+  const visState = useVisState();
+  const camera = () => store.getState().keplerGl.map?.mapState;
   const [focus, setFocus] = useState<Focus>({level: 'seoul'});
   const [grain, setGrainState] = useState<Grain>('dong');
   // What the map is about: up to two variables, linked from the drawer (🔗). Two of a
@@ -149,8 +152,8 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (isIndustry(key) && !onTables(key)) loadIndustries([key]).then(refreshDailyTables).catch(() => {});
   };
 
-  const flyTo = (bounds: Bounds) => kepler?.mapState && flyToBounds(dispatch, kepler.mapState, bounds);
-  const focusSeoul = () => { setFocus({level: 'seoul'}); if (kepler?.mapState) flyToView(dispatch, kepler.mapState, SEOUL_VIEW); };
+  const flyTo = (bounds: Bounds) => { const m = camera(); if (m) flyToBounds(dispatch, m, bounds); };
+  const focusSeoul = () => { setFocus({level: 'seoul'}); const m = camera(); if (m) flyToView(dispatch, m, SEOUL_VIEW); };
   const focusGu = (gu: Place) => { setFocus({level: 'gu', gu}); flyTo(gu.bounds); };
   const focusDong = (dong: Place) => {
     const gu = data?.gus.find((g) => g.code === dong.guCode);
@@ -217,13 +220,15 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // toggle tilts to 50° and rotates 24°). Heights are set when the mode switches or a
   // different area layer comes on — not on every change, so a height turned off in
   // kepler's panel stays off.
-  const is3d = !!kepler?.mapState?.dragRotate;
+  const is3d = useCamera((m) => !!m?.dragRotate);
   // 3D from afar: the areas as a flat hex grid (layers.ts cellView) — below zoom 8.8, and
   // once in it, back to the areas only from 9.0, so it does not flicker at the edge.
   // Settings → Map layers switches it off.
   const cellRef = useRef(false);
-  const zoomNow = kepler?.mapState?.zoom ?? 0;
-  cellRef.current = annotations.hexFar && (cellRef.current ? zoomNow < 9.0 : zoomNow < 8.8);
+  // (the zoom only as the switch needs it — below 8.8, between, from 9.0 — so a flight
+  // re-renders this only where it crosses those)
+  const zoomBand = useCamera((m) => { const z = m?.zoom ?? 0; return z < 8.8 ? 0 : z < 9.0 ? 1 : 2; });
+  cellRef.current = annotations.hexFar && (cellRef.current ? zoomBand < 2 : zoomBand < 1);
   setCellView(cellRef.current);
   const cellView = is3d && cellRef.current;
   const toggle3d = () => dispatch(togglePerspective() as any);
@@ -295,7 +300,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // Re-fit raised heights to the zoom once the camera settles — not every frame, which
   // would rebuild the extruded layer 60 times a second during a flight.
   const elevationOwner = useRef(new Map<string, number>());
-  const zoomStep = Math.round((kepler?.mapState?.zoom ?? 0) * 4) / 4;
+  const zoomStep = useCamera((m) => Math.round((m?.zoom ?? 0) * 4) / 4);
   const raisedKeys = (visState?.layers || []).filter((l: any) => l.config.visConfig?.enable3d).map((l: any) => l.id).join(',');
   useEffect(() => {
     if (!is3d || !visState || sandbox) return;
@@ -306,10 +311,10 @@ export default function Overlay({data}: {data: UhusData | null}) {
     return () => window.clearTimeout(t);
   }, [is3d, zoomStep, raisedKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  useMotionClass(kepler, playing);
+  useMotionClass(store, visState, playing);
   useUiScale();
 
-  const sidePanelOpen = !!kepler?.uiState?.activeSidePanel;
+  const sidePanelOpen = useSelector((s: any) => !!s.keplerGl.map?.uiState?.activeSidePanel);
   // kepler leaves a full-height 32px rail on screen even with its panel closed; CSS
   // hides it unless this class says the panel is open.
   useEffect(() => { document.body.classList.toggle('kepler-side-open', sidePanelOpen); }, [sidePanelOpen]);
@@ -410,7 +415,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
   useEffect(() => {
     if (!ready || restored.current) return;
     restored.current = true;
-    restoreSettings(dispatch, kepler);
+    restoreSettings(dispatch, store.getState().keplerGl.map);
   }, [ready]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -503,18 +508,30 @@ function pickedPlace(clicked: any, visState: any): {level: 'dong' | 'gu'; code: 
 }
 
 // Marks <body> while the camera moves or time plays (used by ?blur=motion).
-function useMotionClass(kepler: any, playing: boolean) {
-  const m = kepler?.mapState;
+// (the camera is watched on the store, not rendered with: see Overlay)
+function useMotionClass(store: any, visState: any, playing: boolean) {
   const animating = useMemo(
-    () => playing || !!kepler?.visState?.filters?.some((f: any) => f.isAnimating),
-    [kepler?.visState?.filters, playing]
+    () => playing || !!visState?.filters?.some((f: any) => f.isAnimating),
+    [visState?.filters, playing]
   );
+  const animatingRef = useRef(animating);
+  animatingRef.current = animating;
   useEffect(() => {
-    if (!m) return;
-    document.body.classList.add('map-moving');
-    const t = setTimeout(() => { if (!animating) document.body.classList.remove('map-moving'); }, 180);
-    return () => clearTimeout(t);
-  }, [m?.latitude, m?.longitude, m?.zoom, m?.pitch, m?.bearing, animating]);
+    const view = () => {
+      const m = store.getState().keplerGl.map?.mapState;
+      return m ? [m.latitude, m.longitude, m.zoom, m.pitch, m.bearing].join() : '';
+    };
+    let last = view(), t = 0;
+    const unsubscribe = store.subscribe(() => {
+      const now = view();
+      if (now === last) return;
+      last = now;
+      document.body.classList.add('map-moving');
+      window.clearTimeout(t);
+      t = window.setTimeout(() => { if (!animatingRef.current) document.body.classList.remove('map-moving'); }, 180);
+    });
+    return () => { unsubscribe(); window.clearTimeout(t); };
+  }, [store]);
   useEffect(() => {
     document.body.classList.toggle('map-moving', animating);
   }, [animating]);

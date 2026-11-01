@@ -2,7 +2,7 @@ import {useMemo, useState} from 'react';
 import {VAR_BY_KEY, type Variable} from '../data/catalog';
 import type {Place, UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
-import {useKepler} from './useKepler';
+import {useVisState} from './useKepler';
 import {fmt} from './focusValues';
 import {selectionEntries, type Grain} from './layers';
 import {dailyColoursOf, isBivariateLayer} from './pair';
@@ -22,8 +22,7 @@ type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean
 export default function GraphCard({data, focus, selection, linked, grain, is3d, playing, onPick, onOpenDashboard}: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  const visState = useVisState();
   const filters = visState?.filters || [];
   const vars = useMemo(() => selection.map((k) => VAR_BY_KEY[k]).filter(Boolean) as Variable[], [selection.join()]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [a, b] = vars;

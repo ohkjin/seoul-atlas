@@ -4,7 +4,7 @@ import {Filter, Link2, Settings, Unlink2} from 'lucide-react';
 import {THEMES, VAR_BY_KEY, isTemporal, type Variable} from '../data/catalog';
 import {displayNameOf, type Place, type UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
-import {useKepler} from './useKepler';
+import {useCamera, useVisState} from './useKepler';
 import {extentOf, fmt, focusValue, histogramOf, type Scope} from './focusValues';
 import {dataIdFor, openMapSettings, selectionEntries, type Grain} from './layers';
 import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from './pair';
@@ -27,14 +27,14 @@ type Props = {data: UhusData; focus: Focus; onSeoul: () => void; onGu: (g: Place
 export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, onGrain, selection, linked, pairable, onLink, ranges, onRange,
   onSelect}: Props) {
   const dispatch = useDispatch();
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  const visState = useVisState();
+  const is3d = useCamera((m) => !!m?.dragRotate);
 
   const place = focus.level === 'seoul' ? 'Seoul' : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
   const placeRef = useFitWidth(place);
   const crumbs = focus.level === 'seoul' ? [] : focus.level === 'gu' ? ['SEOUL'] : ['SEOUL', focus.gu.name.toUpperCase()];
   // a pair layer is built a moment after linking; its cards appear once it is there
-  const onMap = selectionEntries(visState, selection, linked, grain, !!kepler?.mapState?.dragRotate).filter((e) => e.layer);
+  const onMap = selectionEntries(visState, selection, linked, grain, is3d).filter((e) => e.layer);
   const splitMaps: any[] = visState?.splitMaps || [];
 
   // A one-day playback window holds exactly one midnight — that is the date shown.

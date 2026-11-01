@@ -3,7 +3,7 @@ import {useDispatch} from 'react-redux';
 import {ChevronDown, ChevronRight, Link2, LoaderCircle, Map as MapIcon, X} from 'lucide-react';
 import {THEMES, VAR_BY_KEY, childrenOf, topVarsOf, type ThemeKey, type Variable} from '../data/catalog';
 import type {Focus} from './Overlay';
-import {useKepler} from './useKepler';
+import {useVisState} from './useKepler';
 import {focusValue, fmt} from './focusValues';
 import InfoTip from './InfoTip';
 import {iconFor} from './icons';
@@ -31,8 +31,7 @@ type Props = {
 // links show on a hovered row, and on every row once a main is picked, as the next thing to do.
 export default function Drawer({focus, grain, headline, setHeadline, selection, onSelect, loading}: Props) {
   const dispatch = useDispatch();
-  const kepler = useKepler();
-  const visState = kepler?.visState;
+  const visState = useVisState();
   const datasets = visState?.datasets || {};
   const filters = visState?.filters || [];
 

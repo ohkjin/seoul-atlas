@@ -3,7 +3,7 @@ import {useDispatch, useStore} from 'react-redux';
 import {interactionConfigChange, mapConfigChange, mapStyleChange, toggleModal} from '@kepler.gl/actions';
 import {EXPORT_DATA_ID, EXPORT_IMAGE_ID, EXPORT_MAP_ID, NO_MAP_ID} from '@kepler.gl/constants';
 import {Download, FileCode2, Image, SlidersHorizontal} from 'lucide-react';
-import {useKepler} from './useKepler';
+import {useMapStyle, useVisState} from './useKepler';
 import {openMapSettings} from './layers';
 import {uiZoom} from './uiScale';
 import type {Annotations} from './MapAnnotations';
@@ -85,14 +85,15 @@ type Props = {onClose: () => void; annotations: Annotations; onAnnotations: (a: 
 export default function SettingsPanel({onClose, annotations, onAnnotations, fx, onFx}: Props) {
   const dispatch = useDispatch();
   const store = useStore<any>();
-  const kepler = useKepler();
+  const visState = useVisState();
+  const mapStyle = useMapStyle();
   const root = useRef<HTMLDivElement>(null);
   const [tab, setTabState] = useState<Tab>(lastTab);
   const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
-  const styleType = kepler?.mapStyle?.styleType;
-  const available = kepler?.mapStyle?.mapStyles || {};
-  const interaction = kepler?.visState?.interactionConfig || {};
-  const visibleGroups = kepler?.mapStyle?.visibleLayerGroups || {};
+  const styleType = mapStyle?.styleType;
+  const available = mapStyle?.mapStyles || {};
+  const interaction = visState?.interactionConfig || {};
+  const visibleGroups = mapStyle?.visibleLayerGroups || {};
   const groupsHere = new Set((available[styleType]?.layerGroups || []).map((g: any) => g.slug));
   // opens beside the Settings tab in the rail, its top level with the tab's, and runs down
   // no further than the status bar (scrolling inside if the screen is short)
@@ -203,7 +204,7 @@ export default function SettingsPanel({onClose, annotations, onAnnotations, fx, 
           <i aria-hidden />
         </label>
         {/* kepler's own panel for the layers' look: colours, heights, opacity */}
-        <button className="set-kepler" onClick={() => { if (kepler?.visState) openMapSettings(dispatch, kepler.visState); onClose(); }}>
+        <button className="set-kepler" onClick={() => { if (visState) openMapSettings(dispatch, visState); onClose(); }}>
           <SlidersHorizontal size={15} strokeWidth={1.7} />Layer settings (kepler.gl)
         </button>
       </section>

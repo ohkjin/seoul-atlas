@@ -60,8 +60,11 @@ export function flyToView(dispatch: (a: any) => void, mapState: any, target: Vie
   cancelFlight();
   const start = {...mapState};
   const end = {...mapState, ...target};
-  const t0 = performance.now();
+  // the clock starts at the first frame, not at the click: the panels redraw for the new
+  // place in between (a frame of 0.2 s or more), which would otherwise skip the flight's start
+  let t0 = 0;
   const step = (now: number) => {
+    if (!t0) t0 = now;
     const t = Math.min(1, (now - t0) / DURATION_MS);
     const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;   // ease-in-out
     const p = interpolator.interpolateProps(start, end, e);
