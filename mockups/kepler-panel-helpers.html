@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Mockup: kepler's settings panel inside the atlas, with the datasets and the filter the
+     atlas builds for itself (3D cells, the 3×3 pair, the playback filter) named for what they
+     are and without a delete button — so they stay visible and settable, but cannot be removed
+     out from under the map. Three ways to list them. Hover state shown on one row. -->
+<style>
+  :root { --ink: #eef2f7; --ink-2: #c4cbd5; --ink-3: #6f7886; --ink-4: #4a515c; --accent: #e8a35c; --line: rgba(255,255,255,0.08); }
+  body { margin: 0; background: #0b0d11; color: var(--ink); font-family: Manrope, system-ui, sans-serif; padding: 24px; width: 1140px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: start; }
+  .opt { font: 600 13px Manrope; color: var(--accent); margin: 0 0 4px; }
+  .how { font-size: 11.5px; color: #a9b2bf; margin: 0 0 12px; line-height: 1.55; min-height: 70px; } .how b { color: var(--ink); font-weight: 500; }
+  .panel { background: rgba(22,25,31,0.96); border: 1px solid var(--line); border-radius: 16px; padding: 16px 16px 18px; }
+  .eye { font-size: 10px; letter-spacing: .16em; color: var(--accent); }
+  .title { font-size: 17px; margin: 4px 0 12px; display: flex; justify-content: space-between; align-items: center; }
+  .x { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,0.06); display: grid; place-items: center; font-size: 13px; color: var(--ink-3); }
+  .tabs { display: flex; gap: 18px; color: var(--ink-3); font-size: 13px; padding-bottom: 6px; margin-bottom: 14px; }
+  .tabs span.on { color: var(--ink); border-bottom: 2px solid var(--ink); padding-bottom: 4px; }
+  .sec { font-size: 11px; letter-spacing: .08em; color: var(--ink-3); margin: 6px 0 8px; display: flex; justify-content: space-between; }
+  .ds { display: flex; gap: 9px; padding: 5px 6px; border-radius: 8px; position: relative; }
+  .ds.hover { background: rgba(255,255,255,0.05); }
+  .sq { width: 9px; height: 9px; border-radius: 2px; margin-top: 4px; flex: none; }
+  .nm { font-size: 12.5px; color: var(--ink-2); } .nm small { display: block; font-size: 10.5px; color: var(--ink-3); margin-top: 2px; }
+  .ds.helper .nm { color: var(--ink-3); }
+  .acts { margin-left: auto; display: flex; gap: 8px; color: var(--ink-3); font-size: 12px; align-items: center; }
+  .lock { font-size: 11px; color: var(--ink-4); }
+  .tag { font-size: 9.5px; letter-spacing: .06em; color: var(--ink-3); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; margin-left: 6px; }
+  .grp { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+  .fold { font-size: 12px; color: var(--ink-3); padding: 6px; display: flex; justify-content: space-between; border-radius: 8px; }
+  .note { font-size: 10.5px; color: var(--ink-4); padding: 0 6px 6px; line-height: 1.45; }
+  .filters { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+  .fhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 15px; }
+  .add { font-size: 11px; background: var(--accent); color: #1a1208; border-radius: 999px; padding: 4px 10px; }
+  .f { border: 1px solid var(--line); border-left: 2px solid #c8467f; border-radius: 0 10px 10px 0; padding: 9px 10px; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12.5px; }
+  .f.ours { border-left-color: var(--accent); }
+  .pill { font-size: 10px; color: #9fd08a; border: 1px solid rgba(159,208,138,0.4); border-radius: 4px; padding: 0 5px; }
+  .pill.n { color: #7fa3e6; border-color: rgba(127,163,230,0.4); }
+  .f .acts { gap: 10px; }
+  .was { text-decoration: line-through; color: var(--ink-4); font-size: 10.5px; margin-left: 4px; }
+  .cur { position: absolute; right: 6px; top: 18px; font-size: 14px; color: #fff; }
+  .tip { position: absolute; right: -4px; top: 34px; font-size: 10.5px; background: #20242c; border: 1px solid var(--line); color: var(--ink-2); padding: 3px 7px; border-radius: 6px; white-space: nowrap; z-index: 2; }
+</style>
+<body>
+<div class="grid" id="g"></div>
+<script>
+const real = [['#8a3fd1', 'Dong', '422 rows'], ['#2d5bff', 'Gu', '25 rows'], ['#c8467f', 'Gu · daily', '9,150 rows'], ['#26a69a', 'Dong · daily', '154,452 rows']];
+const helpers = [['#e8a37c', '3D cells · neighbourhoods', 'Dong · cells', '1,182 rows'], ['#5f8a8b', '3D cells · districts', 'Gu · cells', '1,182 rows'],
+  ['#9fd08a', '3×3 map · RHSI × Elderly', 'RHSI × Elderly', '422 rows']];
+const icons = '<span title="Show data table">▦</span><span title="Remove">🗑</span>';
+const row = ([c, n, r]) => `<div class="ds"><span class="sq" style="background:${c}"></span><span class="nm">${n} ›<small>${r}</small></span></div>`;
+const hrow = ([c, n, was, r], opts = {}) => `<div class="ds helper${opts.hover ? ' hover' : ''}"><span class="sq" style="background:${c}"></span>
+  <span class="nm">${n}${opts.tag ? '<span class="tag">MAP</span>' : ''}<small>${r}${opts.was ? `<span class="was">${was}</span>` : ''}</small></span>
+  ${opts.hover ? '<span class="acts"><span>▦</span><span class="lock">🔒</span></span><span class="cur">↖</span><span class="tip">Made by the atlas for this map · kept</span>' : ''}</div>`;
+const filters = (name) => `<div class="filters"><div class="fhead">Filters <span class="add">+ Add Filter</span></div>
+  <div class="f"><span class="pill">time</span>${name}<span class="acts"><span>◷</span><span class="lock">🔒</span></span></div>
+  <div class="f ours"><span class="pill n">#</span>RHSI<span class="acts"><span>🗑</span></span></div></div>`;
+const shell = (body) => `<div class="panel"><div class="eye">KEPLER.GL</div><div class="title">Map settings <span class="x">✕</span></div>
+  <div class="tabs"><span class="on">Layers</span><span>Filters</span><span>Interactions</span><span>Base map</span></div>${body}</div>`;
+const opts = [
+  ['A · Renamed, in place', 'The three helpers keep their place in the list, under <b>names that say what they are</b>; on hover their bin is a <b>lock</b>. The playback filter reads <b>Playback · date</b> instead of "Synced", locked the same way. Old names shown struck through only for this mockup.',
+    shell(`<div class="sec">DATASETS (7)</div>${real.map(row).join('')}${hrow(helpers[0], {was: 1})}${hrow(helpers[1], {was: 1, hover: 1})}${hrow(helpers[2], {was: 1})}${filters('Playback · date <span class="was">Synced</span>')}`)],
+  ['B · Data, then what the map built', 'The four real datasets first; the helpers below a thin rule as <b>"Built for the map"</b>, dimmer, with one line saying they come and go with what is on the map. Same lock, same playback filter.',
+    shell(`<div class="sec">DATASETS (4)</div>${real.map(row).join('')}<div class="grp"><div class="sec">BUILT FOR THE MAP (3)</div>
+      <div class="note">Made by the atlas for 3D and the 3×3 map; they follow what is on the map.</div>${helpers.map((h, i) => hrow(h, {hover: i === 1})).join('')}</div>${filters('Playback · date')}`)],
+  ['C · Helpers folded away', 'Like B, but the helpers sit <b>folded</b> under one line until opened — the list reads as the four real datasets. Opening shows them as in B.',
+    shell(`<div class="sec">DATASETS (4)</div>${real.map(row).join('')}<div class="grp"><div class="fold"><span>Built for the map (3)</span><span>›</span></div></div>${filters('Playback · date')}`)],
+];
+document.getElementById('g').innerHTML = opts.map(([n, how, p]) => `<div><div class="opt">${n}</div><p class="how">${how}</p>${p}</div>`).join('');
+</script>
+</body>

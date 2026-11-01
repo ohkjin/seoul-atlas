@@ -9,11 +9,13 @@ import Overlay from './overlay/Overlay';
 import Landing, {landingWanted} from './overlay/Landing';
 import {keplerTheme} from './kepler/theme';
 import {SettingsHeaderFactory} from './kepler/SettingsHeader';
+import {builtForTheMap} from './kepler/BuiltForTheMap';
 
 export const KEPLER_ID = 'map';
 
-// kepler with its settings-panel header swapped for ours (kepler's injectComponents).
-const KeplerGl = injectComponents([[PanelHeaderFactory, SettingsHeaderFactory]] as any);
+// kepler with its settings-panel header swapped for ours, and what the atlas builds for
+// itself set apart in the panel (kepler's injectComponents; BuiltForTheMap.tsx).
+const KeplerGl = injectComponents([[PanelHeaderFactory, SettingsHeaderFactory], ...builtForTheMap] as any);
 
 export default function App() {
   const dispatch = useDispatch();
@@ -34,8 +36,8 @@ export default function App() {
             {info: {id: 'dong', label: 'Dong'}, data: d.dong},
             {info: {id: 'gu', label: 'Gu'}, data: d.gu},
             {info: {id: 'gu_daily', label: 'Gu · daily'}, data: d.guDaily},
-            {info: {id: 'dong_cells', label: 'Dong · cells'}, data: d.dongCells},
-            {info: {id: 'gu_cells', label: 'Gu · cells'}, data: d.guCells}
+            {info: {id: 'dong_cells', label: '3D cells · neighbourhoods'}, data: d.dongCells},
+            {info: {id: 'gu_cells', label: '3D cells · districts'}, data: d.guCells}
           ],
           options: {centerMap: false, readOnly: false},
           config: mapConfig

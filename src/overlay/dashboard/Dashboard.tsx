@@ -1,12 +1,12 @@
-import {useEffect, useMemo, useRef} from 'react';
+import {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Equal, GripHorizontal, Maximize2, Minimize2, X} from 'lucide-react';
-import {VAR_BY_KEY, type Variable} from '../../data/catalog';
+import {THEMES, VAR_BY_KEY, type Variable} from '../../data/catalog';
 import type {Place, UhusData} from '../../data/uhus';
 import type {Focus} from '../Overlay';
 import {useKepler} from '../useKepler';
 import {selectionEntries, type Grain, type OnMap} from '../layers';
 import {placeSeries} from '../scatter';
-import {ourFiltersKey} from '../ourFilters';
+import {filtersKey} from '../ourFilters';
 import BigScatter from './BigScatter';
 import HeatResponse from './HeatResponse';
 import Ranking from './Ranking';
@@ -26,12 +26,13 @@ export type DashCtx = Props & {vars: Variable[]; places: Place[]; series: Map<st
 
 // The dashboard: a window floating over the map — moved and resized the way kepler.gl's
 // legend is (useWindowFrame: grips that show on hover, anchored to the nearer edges,
-// remembered), maximised by double-clicking its title bar — with four views of the same
-// selection and focus as the map: the scatter, large; the heat response of the focused
-// place; the ten highest and lowest places; and the whole theme as small maps. Below them,
-// scrolled to, a wide panel that follows the selection: sales leading it, their year and the
-// heat (SalesPanel); otherwise what drives RHSI (the SHAP beeswarms). Clicking a place in
-// any of them focuses the map there.
+// remembered), maximised by double-clicking its title bar — with views of the same
+// selection and focus as the map, each a half of the window: the scatter; the heat response
+// of the focused place; every place in order with the ten highest and lowest; the whole
+// theme as maps with the place's profile; then for what is on the map, sales, their year
+// and the heat (SalesPanel); RHSI or SHAP, what drives it. Any panel expands to fill the
+// window (its button, or a double-click on its name; Esc restores). Clicking a place in any
+// of them focuses the map there.
 const MIN = {w: 560, h: 380};
 const EDGES: Grip[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
@@ -48,7 +49,7 @@ export default function Dashboard(props: Props) {
   // the day or when a dataset arrives, so those are what the memo watches
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, vars, grain, filters),
-    [selection.join(), grain, datasetKeys, day, ourFiltersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+    [selection.join(), grain, datasetKeys, day, filtersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
   const entries = visState ? selectionEntries(visState, selection, linked, grain, is3d) : [];
   const ctx: DashCtx = {...props, vars, places, series, datasets, filters, day, entries};
 
@@ -59,8 +60,8 @@ export default function Dashboard(props: Props) {
     return {ax: 'right', x: 16, ay: 'top', y: 76, w: Math.max(Math.min(1080, W - 32), W * 0.72),
       h: Math.max(Math.min(840, H - 84), H - 110)};
   }, MIN);
-  // the four panels fill the grid's visible height (--grid-h in styles.css), the SHAP panel
-  // scrolls in below them
+  // the panels are halves of the grid's visible height (--grid-h in styles.css), and an
+  // expanded one all of it
   const grid = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = grid.current;
@@ -69,19 +70,41 @@ export default function Dashboard(props: Props) {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // one panel at a time fills the grid; Esc puts it back before it closes the window
+  const [expanded, setExpanded] = useState<string | null>(null);
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (expanded) setExpanded(null); else onClose(); } };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
-  }, [onClose]);
+  }, [onClose, expanded]);
+  const panel = (id: string, title: string, body: ReactNode) => {
+    const big = expanded === id, toggle = () => setExpanded(big ? null : id);
+    return (
+      <section key={id} className={`dash-panel${big ? ' expanded' : expanded ? ' hidden' : ''}`}>
+        <div className="dash-panel-head" onDoubleClick={toggle}>
+          <h3>{title}</h3>
+          <button className="dash-expand" onClick={toggle} aria-label={big ? `Restore ${title}` : `Expand ${title}`}
+            title={big ? 'Restore (Esc)' : 'Expand to the whole window'}>
+            {big ? <Minimize2 size={12} strokeWidth={1.75} /> : <Maximize2 size={12} strokeWidth={1.75} />}
+          </button>
+        </div>
+        {body}
+      </section>
+    );
+  };
 
   const placeName = focus.level === 'seoul' ? 'Seoul' : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
+  // The last panels follow what is on the map, the main's first: sales bring their year
+  // (SalesPanel), RHSI or a SHAP contribution its drivers (ShapPanel); anything else, neither.
+  const wide = vars.map((x) => isSalesKey(x.key) ? {kind: 'sales', key: x.key}
+    : x.key === 'RHSI_retail' || x.key.startsWith('shap_') ? {kind: 'shap', key: x.key} : null)
+    .filter((w, i, a): w is {kind: string; key: string} => !!w && a.findIndex((v) => v?.kind === w.kind) === i);
   return (
     <div className={`dash glass${win.held ? ' held' : ''}`} role="dialog" aria-label="Dashboard" style={win.style}>
       <div className="dash-head" onPointerDown={win.grab('move')} onDoubleClick={win.toggleMax}>
         <div>
           <div className="dash-eyebrow">Dashboard · {grain === 'dong' ? 'neighbourhoods' : 'districts'}</div>
-          <div className="dash-title">{placeName}{vars.length ? ` — ${vars.map((x) => x.short).join(' × ')}` : ''}</div>
+          <div className="dash-title">{placeName}{vars.length ? ` — ${vars.map((x) => x.long ?? x.short).join(' × ')}` : ''}</div>
         </div>
         <div className="dash-tools">
           <button className="icon-btn dash-close" aria-label={win.maxed ? 'Restore the dashboard' : 'Maximise the dashboard'}
@@ -94,14 +117,14 @@ export default function Dashboard(props: Props) {
         </div>
       </div>
       <Summary ctx={ctx} />
-      <div className="dash-grid" ref={grid}>
-        <section className="dash-panel"><h3>{vars.length === 2 ? 'Relationship' : 'Spread'}</h3><BigScatter ctx={ctx} /></section>
-        <section className="dash-panel"><h3>Heat response</h3><HeatResponse ctx={ctx} /></section>
-        <section className="dash-panel"><h3>Ranking{vars[0] ? ` — ${vars[0].short}` : ''}</h3><Ranking ctx={ctx} /></section>
-        <section className="dash-panel"><h3>Theme at a glance</h3><MiniMaps ctx={ctx} /></section>
-        {vars[0] && isSalesKey(vars[0].key)
-          ? <section className="dash-panel dash-wide"><h3>Sales — the year, and the heat</h3><SalesPanel ctx={ctx} /></section>
-          : <section className="dash-panel dash-wide"><h3>What drives RHSI — SHAP, by group</h3><ShapPanel ctx={ctx} /></section>}
+      <div className={`dash-grid${expanded ? ' expanded' : ''}`} ref={grid}>
+        {panel('scatter', vars.length === 2 ? 'Relationship' : 'Spread', <BigScatter ctx={ctx} />)}
+        {panel('heat', 'Heat response', <HeatResponse ctx={ctx} />)}
+        {panel('ranking', `Ranking${vars[0] ? ` — ${vars[0].long ?? vars[0].short}` : ''}`, <Ranking ctx={ctx} />)}
+        {panel('theme', `${THEMES.find((t) => t.key === vars[0]?.theme)?.label ?? 'Theme'} at a glance`, <MiniMaps ctx={ctx} />)}
+        {wide.map((w) => w.kind === 'sales'
+          ? panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />)
+          : panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />))}
       </div>
       {/* kepler's grips: a move handle centred on the top edge, resize handles on the
           bottom and right edges, and every edge and corner resizable */}

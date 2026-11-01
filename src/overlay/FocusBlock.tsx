@@ -1,11 +1,11 @@
-import {Fragment, useLayoutEffect, useRef, useState} from 'react';
+import {Fragment, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch} from 'react-redux';
 import {Filter, Link2, Settings, Unlink2} from 'lucide-react';
-import {THEMES, isTemporal} from '../data/catalog';
-import type {Place, UhusData} from '../data/uhus';
+import {THEMES, VAR_BY_KEY, isTemporal, type Variable} from '../data/catalog';
+import {displayNameOf, type Place, type UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
 import {useKepler} from './useKepler';
-import {extentOf, fmt, focusValue, histogramOf} from './focusValues';
+import {extentOf, fmt, focusValue, histogramOf, type Scope} from './focusValues';
 import {dataIdFor, openMapSettings, selectionEntries, type Grain} from './layers';
 import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from './pair';
 import InfoTip from './InfoTip';
@@ -38,14 +38,23 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
   const day = time?.value ? Math.ceil(time.value[0] / DAY) * DAY : null;
 
   // The atlas's own filter: a value range on each variable, opened from the card. How many
-  // places pass both, at this grain (and, for a daily variable, on the playing day).
+  // places pass both, at this grain (and, for a daily variable, on the playing day) — within
+  // the district in focus when neighbourhoods are mapped, else across Seoul. Its bars too.
   const [filterOpen, setFilterOpen] = useState<Record<string, boolean>>({});
   const anyFilter = Object.keys(ranges).length > 0 || Object.values(filterOpen).some(Boolean);
-  const passing = anyFilter
+  const scopeGu = grain === 'dong' && focus.level !== 'seoul' ? focus.gu : null;
+  const scopeDongs = useMemo(() => scopeGu ? new Set(data.dongs.filter((d) => d.guCode === scopeGu.code).map((d) => d.code)) : null,
+    [scopeGu?.code, data]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const passed = anyFilter
     ? placeSeries(visState?.datasets, onMap.map((e) => e.variable).filter((x, i, a) => a.findIndex((y) => y.key === x.key) === i),
-      grain, visState?.filters || [])[0]?.size ?? null
+      grain, visState?.filters || [])[0] ?? null
     : null;
-  const places = grain === 'dong' ? data.dongs.length : data.gus.length;
+  const passing = passed && (scopeDongs ? [...passed.keys()].filter((c) => scopeDongs.has(c)).length : passed.size);
+  const places = scopeDongs ? scopeDongs.size : grain === 'dong' ? data.dongs.length : data.gus.length;
+  // a district-only variable (daily weather) has no neighbourhood rows: its district's rows
+  const scopeOf = (source: any): Scope | undefined => !scopeGu || !scopeDongs ? undefined
+    : source?.fields.some((f: any) => f.name === 'dong_code') ? {id: scopeGu.code, field: 'dong_code', codes: scopeDongs}
+    : {id: scopeGu.code, field: 'gu_code', codes: new Set([scopeGu.code])};
 
   return (
     <section className="focus">
@@ -58,14 +67,21 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
       <PlaceSentence data={data} focus={focus} grain={grain} onSeoul={onSeoul} onGu={onGu} onDong={onDong} onGrain={onGrain} />
 
       <div className="layer-cards">
-        {onMap.map(({layer, variable: x, pairPart}, i) => {
+        {onMap.map(({layer, variable: sel, pairPart}, i) => {
           const dataset = visState.datasets[layer.config.dataId];
-          // the daily pair's grid and raised areas sit on the areas; its values live in the daily rows
-          const onLayer = dataset?.fields.some((f: any) => f.name === x.key);
           // the cells hold each place's value many times over: an average over them would weigh
           // a place by its area, so a card on the cells reads the places themselves
           const cells = layer.config.dataId.endsWith('_cells');
-          const source = !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)]
+          // Colour by another column, picked in kepler's settings: the card shows that one —
+          // what the map shows — named, valued and ranged as it is.
+          const cf: string | undefined = !pairPart ? layer.config.colorField?.name : undefined;
+          const recoloured = !!cf && cf !== sel.key && !!dataset?.fields.some((f: any) => f.name === cf);
+          const x: Variable = recoloured ? (VAR_BY_KEY[cf!] ?? {...sel, key: cf!, short: displayNameOf(cf!), full: displayNameOf(cf!), unit: '', how: 'mean'}) : sel;
+          // the daily pair's grid and raised areas sit on the areas; its values live in the daily rows
+          const onLayer = dataset?.fields.some((f: any) => f.name === x.key);
+          const areas = visState.datasets[grain];
+          const source = recoloured ? (cells && areas?.fields.some((f: any) => f.name === x.key) ? areas : dataset)
+            : !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)]
             : cells ? visState.datasets[isTemporal(x) ? dataIdFor(x, grain) : grain] : dataset;
           const value = focusValue(source, x.key, focus, x.how, visState.filters);
           const extent = extentOf(source, x.key);
@@ -76,7 +92,8 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
           // B of a pair: the height of raised areas, or the size of daily points
           const size = pairPart === 'b' && layer.type === 'point';
           const height = pairPart === 'b' && !bivariate && !size;
-          const axis = bivariate ? (pairPart === 'a' ? BIVARIATE.map((row) => row[0]) : BIVARIATE[0]) : null;
+          const grid = bivariate ? gridOf(layer) : BIVARIATE;
+          const axis = bivariate ? (pairPart === 'a' ? grid.map((row) => row[0]) : grid[0]) : null;
           // side by side, each card says which half of the split map is its own
           const half = splitMaps.findIndex((m: any) => m.layers?.[layer.id]);
           const role = bivariate ? (pairPart === 'a' ? '↑ grid rows' : 'grid columns →')
@@ -115,8 +132,8 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                 )}
               </div>
               <div className="lc-row">
-                <span className="lc-name">{x.short}</span>
-                <InfoTip x={x} />
+                <span className="lc-name" title={recoloured ? `Colour set to ${x.short} in map settings (was ${sel.short})` : undefined}>{x.long ?? x.short}</span>
+                {VAR_BY_KEY[x.key] && <InfoTip x={x} />}
                 <button className={`lc-filter${ranges[x.key] ? ' on' : ''}${filterOpen[x.key] ? ' open' : ''}`}
                   title={ranges[x.key] ? 'Filtered — click to edit' : 'Filter places by this value'} aria-pressed={!!ranges[x.key]}
                   onClick={() => setFilterOpen((o) => ({...o, [x.key]: !o[x.key]}))}>
@@ -133,7 +150,7 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                   {axis ? (
                     <div className="legend-axis">
                       <div className="legend-steps">{axis.map((c) => <i key={c} style={{background: c}} />)}</div>
-                      {pairPart === 'a' && <BivariateGrid here={focusCell(layer, dataset, focus)} />}
+                      {pairPart === 'a' && <BivariateGrid grid={grid} here={focusCell(layer, dataset, focus)} />}
                     </div>
                   ) : height
                     ? <div className="legend-heights" aria-hidden><i /><i /><i /><i /><i /></div>
@@ -149,8 +166,8 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                 </div>
               )}
               {extent && (filterOpen[x.key] || ranges[x.key]) && (
-                <RangeFilter domain={extent} value={ranges[x.key] ?? null} hist={histogramOf(source, x.key, extent)} unit={x.unit}
-                  count={passing != null ? [passing, places] : null} onChange={(r) => onRange(x.key, r)} />
+                <RangeFilter domain={extent} value={ranges[x.key] ?? null} hist={histogramOf(source, x.key, extent, 24, scopeOf(source))} unit={x.unit}
+                  count={passing != null ? [passing, places] : null} where={scopeGu?.name} onChange={(r) => onRange(x.key, r)} />
               )}
             </article>
             </Fragment>
@@ -164,14 +181,24 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
 
 // The 3×3 key of the bivariate map: A rises up the rows, B runs along the columns. The
 // focused place's own cell is ringed, so the card says where it falls.
-function BivariateGrid({here}: {here: [number, number] | null}) {
+function BivariateGrid({grid, here}: {grid: string[][]; here: [number, number] | null}) {
   return (
     <div className="bi-grid" aria-hidden>
       {[2, 1, 0].map((la) => [0, 1, 2].map((lb) => (
-        <i key={`${la}${lb}`} className={here && here[0] === la && here[1] === lb ? 'here' : ''} style={{background: BIVARIATE[la][lb]}} />
+        <i key={`${la}${lb}`} className={here && here[0] === la && here[1] === lb ? 'here' : ''} style={{background: grid[la][lb]}} />
       )))}
     </div>
   );
+}
+
+// The pair's nine colours as kepler holds them — a person may have changed them in the
+// settings — in the order the pair wrote its classes (A's third, then B's). The daily
+// pair recolours by place every day from the atlas's own nine, so it keeps those.
+function gridOf(layer: any): string[][] {
+  if (isDailyBivariate(layer)) return BIVARIATE;
+  const range = layer.config.visConfig?.colorRange;
+  const nine: string[] = range?.colorMap?.length === 9 ? range.colorMap.map((c: [string, string]) => c[1]) : range?.colors || [];
+  return nine.length === 9 ? [nine.slice(0, 3), nine.slice(3, 6), nine.slice(6, 9)] : BIVARIATE;
 }
 
 // The focused place's cell: from the static pair's class label, or the daily pair's colour

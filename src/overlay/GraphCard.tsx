@@ -6,7 +6,7 @@ import {useKepler} from './useKepler';
 import {fmt} from './focusValues';
 import {selectionEntries, type Grain} from './layers';
 import {dailyColoursOf, isBivariateLayer} from './pair';
-import {ourFiltersKey} from './ourFilters';
+import {filtersKey} from './ourFilters';
 import {Scatter, colouring, focusTest, layoutScatter, placeSeries, useStableCallback, type Box} from './scatter';
 
 type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean; grain: Grain; is3d: boolean; playing: boolean;
@@ -39,7 +39,7 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
   // the day or when a dataset arrives, so those are what the memo watches
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, vars, grain, filters),
-    [selection.join(), grain, datasetKeys, day, ourFiltersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+    [selection.join(), grain, datasetKeys, day, filtersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // the map's colouring, so a dot and its place share a colour
   const entries = visState ? selectionEntries(visState, selection, linked, grain, is3d) : [];
@@ -91,7 +91,10 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
                 )}
               </>
             ) : (
-              <span className="gc-hint">{plot.n} {grain === 'dong' ? 'neighbourhoods' : 'districts'} · hover a dot, click to focus</span>
+              // a district in focus: its own neighbourhoods are the bright dots — say how many
+              <span className="gc-hint">{grain === 'dong' && focus.level === 'gu'
+                ? `${places.filter((p) => p.guCode === focus.gu.code && plot.at.has(p.code)).length} in ${focus.gu.name} · of ${plot.n} neighbourhoods`
+                : `${plot.n} ${grain === 'dong' ? 'neighbourhoods' : 'districts'} · hover a dot, click to focus`}</span>
             )}
           </div>
         </>

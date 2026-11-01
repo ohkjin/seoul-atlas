@@ -62,7 +62,7 @@ export function layoutScatter(places: Place[], series: Map<string, number>[], nV
 // Linear, or square root (sign kept) when the values are skewed: a long right tail. The
 // axis spans the 2nd–98th percentile — a handful of outliers squeezed every other dot into
 // a sliver — and anything beyond sits on the edge.
-export type Scale = {px: (v: number) => number; lo: number; hi: number};
+export type Scale = {px: (v: number) => number; lo: number; hi: number; sqrt: boolean};
 export function scaleOf(values: number[], from: number, to: number): Scale {
   const sorted = [...values].sort((a, b) => a - b);
   const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))];
@@ -71,7 +71,24 @@ export function scaleOf(values: number[], from: number, to: number): Scale {
   const f = (v: number) => (skewed ? Math.sign(v) * Math.sqrt(Math.abs(v)) : v);
   const loV = sorted.length > 20 ? q(0.02) : min, hiV = sorted.length > 20 ? q(0.98) : max;
   const lo = f(loV), hi = f(hiV), span = hi - lo || 1;
-  return {px: (v: number) => from + Math.max(0, Math.min(1, (f(v) - lo) / span)) * (to - from), lo: loV, hi: hiV};
+  return {px: (v: number) => from + Math.max(0, Math.min(1, (f(v) - lo) / span)) * (to - from), lo: loV, hi: hiV, sqrt: skewed};
+}
+
+// Round values to label an axis between lo and hi: an even step for a linear axis; 1-2-5
+// steps for a square-root one, whose low end is stretched out.
+export function niceTicks(lo: number, hi: number, sqrt = false, count = 5): number[] {
+  if (!(hi > lo)) return [lo];
+  if (sqrt) {
+    const out = lo <= 0 ? [0] : [];
+    for (let e = Math.floor(Math.log10(Math.max(hi, 1e-9))) - 3; e <= Math.ceil(Math.log10(hi)); e++)
+      for (const m of [1, 2, 5]) { const t = m * 10 ** e; if (t >= lo && t <= hi) out.push(t); }
+    // keep the larger ones, which the square root spreads apart; drop the crowded small ones
+    return out.length > count + 1 ? [out[0], ...out.slice(-count)] : out;
+  }
+  const raw = (hi - lo) / count, mag = 10 ** Math.floor(Math.log10(raw)), step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw)!;
+  const out: number[] = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + step * 1e-9; t += step) out.push(Math.abs(t) < step * 1e-9 ? 0 : +t.toPrecision(12));
+  return out;
 }
 
 // The dot colours: the bivariate grid (thirds of each variable) when the map shows it,
@@ -153,6 +170,23 @@ export const Scatter = memo(function Scatter({places, vars, box, plot, colourOf,
     <svg className={`gc-plot${playing ? ' playing' : ''}${className ? ` ${className}` : ''}`} viewBox={`0 0 ${W} ${H}`} role="img"
       aria-label={b ? `${a.short} against ${b.short}, one dot per place` : `Spread of ${a.short}, one dot per place`}
       onMouseLeave={() => onHover(null)}>
+      {/* numbers along both axes, for the larger chart; beyond them the dots sit on the edge */}
+      {ticks && plot.sx && (
+        <g className="gc-ticks">
+          {niceTicks(plot.sx.lo, plot.sx.hi, plot.sx.sqrt).map((t) => (
+            <g key={`x${t}`}>
+              <line x1={plot.sx!.px(t)} x2={plot.sx!.px(t)} y1={pad.t} y2={H - pad.b} />
+              <text className="gc-tick" x={plot.sx!.px(t)} y={H - pad.b + 11} textAnchor="middle">{short(t)}</text>
+            </g>
+          ))}
+          {plot.sy && niceTicks(plot.sy.lo, plot.sy.hi, plot.sy.sqrt, 6).map((t) => (
+            <g key={`y${t}`}>
+              <line x1={pad.l} x2={W - pad.r} y1={plot.sy!.px(t)} y2={plot.sy!.px(t)} />
+              <text className="gc-tick" x={pad.l - 4} y={plot.sy!.px(t) + 3} textAnchor="end">{short(t)}</text>
+            </g>
+          ))}
+        </g>
+      )}
       {/* the bivariate grid's thirds, the same cuts that colour the map */}
       {showCuts && plot.cuts && (
         <g className="gc-cuts">
@@ -171,16 +205,8 @@ export const Scatter = memo(function Scatter({places, vars, box, plot, colourOf,
             onMouseEnter={() => onHover(p.code)} onClick={() => onPick(grain, p.code)} />
         );
       })}
-      <text className="gc-axis" x={W - pad.r} y={H - 1} textAnchor="end">{(b ?? a).short} →</text>
-      {b && <text className="gc-axis" x={pad.l} y={1} dominantBaseline="hanging">↑ {a.short}</text>}
-      {/* the visible range's ends, for the larger chart */}
-      {ticks && plot.sx && (
-        <>
-          <text className="gc-tick" x={pad.l + 6} y={H - 1}>{short(plot.sx.lo)}</text>
-          {plot.sy && <text className="gc-tick" x={pad.l} y={H - pad.b - 8}>{short(plot.sy.lo)}</text>}
-          {plot.sy && <text className="gc-tick" x={pad.l} y={pad.t + 14}>{short(plot.sy.hi)}</text>}
-        </>
-      )}
+      <text className="gc-axis" x={W - pad.r} y={H - 1} textAnchor="end">{(b ?? a).short}{ticks && plot.sx?.sqrt ? ' (√ scale)' : ''} →</text>
+      {b && <text className="gc-axis" x={pad.l} y={1} dominantBaseline="hanging">↑ {a.short}{ticks && plot.sy?.sqrt ? ' (√ scale)' : ''}</text>}
     </svg>
   );
 });
@@ -195,5 +221,6 @@ export function useStableCallback<A extends unknown[]>(fn: (...args: A) => void)
 
 const short = (v: number) => {
   const a = Math.abs(v);
-  return a >= 1e8 ? `${(v / 1e8).toFixed(0)}억` : a >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : a >= 10 ? v.toFixed(0) : v.toFixed(2);
+  return a >= 1e8 ? `${(v / 1e8).toFixed(0)}억` : a >= 1e4 ? `${(v / 1e4).toFixed(0)}만` : a >= 10 ? v.toFixed(0)
+    : a === 0 || a >= 0.1 ? v.toFixed(2) : String(+v.toPrecision(1));
 };

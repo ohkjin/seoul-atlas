@@ -6,7 +6,7 @@ import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {loadDongDaily} from '../data/uhus';
-import {dailyBase, isIndustry, loadIndustries, loadedIndustries, setDailyBase, withIndustries} from '../data/industries';
+import {dailyBase, dailyExtras, isIndustry, joinStatic, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
 import {useKepler} from './useKepler';
 import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
 import {adaptElevation, drawSelection, layersOnMap, planFor, restylePair, setCellView, sync3d, syncOrder, toggleLink, withMain,
@@ -29,7 +29,7 @@ import {useUiScale} from './uiScale';
 import {enterSandbox, leaveSandbox} from './sandbox';
 import SandboxBar from './SandboxBar';
 import MapScale from './MapScale';
-import {ourFiltersKey, syncOurFilters, type Ranges} from './ourFilters';
+import {filtersKey, syncOurFilters, type Ranges} from './ourFilters';
 import {showDongOutline} from './outline';
 
 export type Focus = {level: 'seoul'} | {level: 'gu'; gu: Place} | {level: 'dong'; gu: Place; dong: Place};
@@ -99,7 +99,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     for (const [id, level, label] of [['gu_daily', 'gu', 'Gu · daily'], ['dong_daily', 'dong', 'Dong · daily']] as const) {
       const base = dailyBase(level);
       if (!sets[id] || !base) continue;
-      if (loadedIndustries().every((k) => sets[id].fields.some((f: any) => f.name === k))) continue;
+      if (dailyExtras().every((k) => sets[id].fields.some((f: any) => f.name === k))) continue;
       const table = withIndustries(base, level);
       dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info: {id, label}, data: table} as any,
         options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
@@ -190,11 +190,14 @@ export default function Overlay({data}: {data: UhusData | null}) {
     return () => window.removeEventListener('pointerdown', grab, true);
   }, []);
 
-  // Clicking a neighbourhood on the map focuses it (feature 2).
+  // Clicking a neighbourhood on the map focuses it (feature 2). kepler would also pin its
+  // tooltip there, a box that stayed over the panels; the click is let go of once read, so
+  // only the hover tooltip shows (its ‹ up-arrow above goes with it for now).
   const clicked = visState?.clicked;
   useEffect(() => {
     if (!clicked || !data || sandbox) return;
     const picked = pickedPlace(clicked, visState);
+    dispatch(onLayerClick(null) as any);
     if (picked?.level === 'dong') { const d = data.dongs.find((x) => x.code === picked.code); if (d) focusDong(d); }
     if (picked?.level === 'gu') { const g = data.gus.find((x) => x.code === picked.code); if (g) focusGu(g); }
     // focusDong is recreated each render; the click is the only real trigger
@@ -263,17 +266,12 @@ export default function Overlay({data}: {data: UhusData | null}) {
     dispatch(setFilter(timeIdx, ['dataId', 'name'] as any, [missing, 'date'] as any, timeDataIds.length) as any);
   }, [datasetKeys, timeIdx, timeDataIds.join()]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 2D ↔ 3D redraws too (daily points become columns); when only the mode changed,
-  // drawSelection keeps a layer hidden in kepler's panel hidden on its twin.
-  const lastDraw = useRef('');
+  // 2D ↔ 3D redraws too (daily points become columns); a layer hidden in kepler's panel
+  // stays hidden, on its twin too (drawSelection).
   useEffect(() => {
-    if (!layersLoaded || !data) return;
-    if (sandbox) { lastDraw.current = ''; return; }   // back from the sandbox: a full redraw
-    const rest = [selectionKey, linked, grain, datasetKeys].join('|');
-    const modeOnly = lastDraw.current === rest;
-    lastDraw.current = rest;
+    if (!layersLoaded || !data || sandbox) return;
     // the store as of right now ('map' is the KeplerGl id in App.tsx)
-    drawSelection(dispatch, () => store.getState().keplerGl.map.visState, {selection, linked, grain, is3d, data, modeOnly});
+    drawSelection(dispatch, () => store.getState().keplerGl.map.visState, {selection, linked, grain, is3d, data});
   }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox, cellView]);   // eslint-disable-line react-hooks/exhaustive-deps
   const pairLayerId = (visState?.layers || []).find((l: any) => l.config.isVisible && pairKeysOf(l.id))?.id;
   // the daily pair's grid takes the colours of the playing day (see pair.ts)
@@ -283,7 +281,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}`).join();
   useEffect(() => {
     if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState);
-  }, [playDay, dailyGrid, datasetKeys, sandbox, ourFiltersKey(visState?.filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playDay, dailyGrid, datasetKeys, sandbox, filtersKey(visState?.filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
   // (the store as of now: a pair dropped in this render's draw must not be restyled)
   useEffect(() => { if (visState && !sandbox) restylePair(dispatch, store.getState().keplerGl.map.visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -346,6 +344,17 @@ export default function Overlay({data}: {data: UhusData | null}) {
     setRanges((cur) => (Object.keys(cur).every((k) => selection.includes(k)) ? cur
       : Object.fromEntries(Object.entries(cur).filter(([k]) => selection.includes(k)))));
   }, [selectionKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // a filter on a place's own value reaches the daily rows too: the value joins those tables
+  // (joinStatic), and the filter then spans them (syncOurFilters rebuilds it for the new tables)
+  useEffect(() => {
+    if (!data) return;
+    let joined = false;
+    for (const key of Object.keys(ranges)) {
+      const x = VAR_BY_KEY[key];
+      if (x && !isTemporal(x)) joined = joinStatic(key, {gu: data.gu as any, dong: data.dong as any}) || joined;
+    }
+    if (joined) refreshDailyTables();
+  }, [Object.keys(ranges).join(), data]);   // eslint-disable-line react-hooks/exhaustive-deps
   const rangesKey = JSON.stringify(ranges);
   useEffect(() => {
     if (!ready || sandbox) return;
@@ -390,9 +399,12 @@ export default function Overlay({data}: {data: UhusData | null}) {
   useEffect(() => {
     if (ready && !sandbox) syncEffects(dispatch, store.getState().keplerGl.map.visState, fx, is3d);
   }, [ready, fxKey, is3d, sandbox, bubbleKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // (and which half of a split map each bubble layer is on: its halo goes with it)
+  const halvesKey = (visState?.splitMaps || []).map((m: any) => Object.keys(m.layers || {})
+    .filter((id) => m.layers[id] && !isHaloId(id)).sort().join('+')).join('|');
   useEffect(() => {
     if (ready) syncHalos(dispatch, () => store.getState().keplerGl.map.visState, fx.halo && !sandbox);
-  }, [ready, bubbleKey, fx.halo, playDay, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready, bubbleKey, halvesKey, fx.halo, playDay, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the basemap and map switches remembered from Settings, once the map is up
   const restored = useRef(false);
   useEffect(() => {
@@ -440,7 +452,8 @@ export default function Overlay({data}: {data: UhusData | null}) {
           }} />
       )}
       {ready && temporalOn && !sandbox && !timeExpanded && (
-        <TimeCard focus={focus} selection={selection} grain={grain} playing={playing} onPlaying={setPlaying} onExpand={expandTime} />
+        <TimeCard focus={focus} selection={selection} linked={linked} is3d={is3d} grain={grain} playing={playing}
+          onPlaying={setPlaying} onExpand={expandTime} />
       )}
       {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select}
         loading={Object.values(industryLoading).filter(Boolean) as string[]} />}

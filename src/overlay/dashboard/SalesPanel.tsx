@@ -72,9 +72,8 @@ function Months({W, y}: {W: number; y: number}) {
   ))}</>;
 }
 
-export default function SalesPanel({ctx}: {ctx: DashCtx}) {
-  const {focus, grain, datasets, vars, day} = ctx;
-  const key = vars[0]?.key ?? 'retail_total_amount';
+export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey: string}) {
+  const {focus, grain, datasets, day} = ctx;
   const {parts, head, industries} = partsOf(key);
 
   // the charts' column width, measured from the grid cell that holds the large year

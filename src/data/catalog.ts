@@ -16,6 +16,9 @@ export type Variable = {
   theme: ThemeKey;
   dataset: DatasetId;
   short: string;
+  // the name in full, for the wide places (the Focus card, the dashboard's titles), where the
+  // short one is an acronym
+  long?: string;
   full: string;
   unit: string;
   source: string;
@@ -90,7 +93,8 @@ export const VARIABLES: Variable[] = [
   v('parking_capacity', 'mobility', 'dong', 'Parking', 'Parking infrastructure intensity', 'per km²', 'Seoul Open Data Portal'),
   v('delta_daypop', 'mobility', 'dong', 'Heat pop. shift', 'Daytime-population response, hot vs mild days', 'log-ratio', 'Seoul Open Data Portal', 'mean', true),
 
-  v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true)
+  {...v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true),
+    long: 'RHSI (Retail Heat Sensitivity Index)'}
 ];
 
 // What explains RHSI: the UHUS model's SHAP contribution of each of its 25 inputs, per
@@ -196,7 +200,7 @@ export const varOfLayerId = (id: string) =>
 export const AREA_STROKE = {stroked: true, strokeColor: [14, 16, 20], strokeOpacity: 0.8, thickness: 0.6};
 
 // One kepler layer (saved-map v1 format) for a variable — the same shape mapConfig uses,
-// so addLayer can parse it with kepler's own config loader. Colours are kepler's defaults.
+// so addLayer can parse it with kepler's own config loader. Colours: colorRangeFor.
 export function layerConfigFor(x: Variable, isVisible = true) {
   if (isTemporal(x)) {
     return {
@@ -204,7 +208,7 @@ export function layerConfigFor(x: Variable, isVisible = true) {
       config: {dataId: 'gu_daily', label: x.short, columns: {lat: 'lat', lng: 'lng'}, isVisible,
         // ~5px on screen, with a white rim so the dots stay findable over any fill.
         visConfig: {radius: 20, opacity: 0.95, outline: true, thickness: 1.5, strokeColor: [255, 255, 255],
-          ...(dailyColorRange(x) ? {colorRange: dailyColorRange(x)} : {})}},
+          colorRange: colorRangeFor(x)}},
       // quantile, as for the areas: equal-width bins put nearly every place's sales in the lowest
       visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile'}
     };
@@ -214,31 +218,51 @@ export function layerConfigFor(x: Variable, isVisible = true) {
   return {
     id: layerIdOf(x.key), type: 'geojson',
     config: {dataId: 'dong', label: x.short, columns: {geojson: '_geojson'}, isVisible,
-      visConfig: {opacity: 0.75, ...AREA_STROKE, filled: true,
+      visConfig: {opacity: 0.75, ...AREA_STROKE, filled: true, colorRange: colorRangeFor(x),
         enable3d: false, elevationScale: 5}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile',
       heightField: {name: x.key, type: 'real'}, heightScale: 'linear'}
   };
 }
 
-// Daily points sit over the warm area fill, so sales, humidity and rain take kepler's
-// teal sequential palette — another hue family, readable from its darkest step on the
-// dark basemap. Temperatures keep kepler's warm default: warm reads as hot.
-export const dailyColorRange = (x: Variable) =>
-  (x.key === 'temp_max' || x.key === 'apptemp_max' ? undefined : paletteRange('Uber Viz Sequential'));
+// Each variable's colours, low to high: the higher, the deeper, in every theme. A variable
+// whose colour is plain from what it is takes that colour (heat red, temperature blue to
+// red, water blue, green space green; commercial land shares the economy's); the rest
+// take their theme's. Red and orange are kept for heat. A signed variable runs blue below
+// zero to red above, as temperature does. Mild days keep kepler's default, as before.
+const THEME_PALETTE: Record<ThemeKey, string> = {environment: 'YlOrRd', people: 'Purples', urban: 'YlOrBr',
+  economy: 'PuBuGn', mobility: 'Blues', insights: 'PuBuGn'};
+const OWN_PALETTE: Record<string, string> = {temp_max: 'RdBu', apptemp_max: 'RdBu', humid_max: 'Blues', precip_sum: 'Blues',
+  n_hot_days: 'YlOrRd', n_mild_days: 'Global Warming', green_space_share: 'Greens', commercial_area_share: 'PuBuGn'};
+// kepler lists RdBu red first
+const REVERSED = new Set(['RdBu']);
+// these end in a step too dark to stand off the near-black basemap: a step more is fetched
+// and the darkest dropped (both ends of a diverging one)
+const LIFTED = new Set(['Purples', 'YlOrBr', 'Blues', 'Greens', 'RdBu']);
+const DIVERGING = new Set(['RdBu']);
+
+// a ramp that runs between two hues (blue to red) rather than pale to deep in one
+export const isDivergingRamp = (x: Variable) => DIVERGING.has(x.signed ? 'RdBu' : OWN_PALETTE[x.key] ?? THEME_PALETTE[x.theme]);
+
+export function colorRangeFor(x: Variable) {
+  const name = x.signed ? 'RdBu' : OWN_PALETTE[x.key] ?? THEME_PALETTE[x.theme];
+  if (!LIFTED.has(name)) return paletteRange(name, 6, REVERSED.has(name));
+  const both = DIVERGING.has(name);
+  const range = paletteRange(name, both ? 8 : 7, REVERSED.has(name));
+  return range && {...range, colors: range.colors.slice(both ? 1 : 0, both ? 7 : 6)};
+}
 
 // A daily variable in 3D (c:key): a bubble per place, coloured and sized by its value.
 // kepler cannot raise its points, and a raised area would need its heights rebuilt every
 // day (a new dataset, 60–140 ms a step) — hexagon columns did stand up, but read as a
 // forest of bars; the bubbles lie on the tilted map instead.
 export function columnConfigFor(x: Variable, dataId: string) {
-  const range = dailyColorRange(x);
   return {
     id: columnIdOf(x.key), type: 'point',
     config: {dataId, label: x.short, columns: {lat: 'lat', lng: 'lng'}, isVisible: true,
       // kepler's zoom-14 radius units: ~1.5–6 px for 422 neighbourhoods, ~6–22 px for 25 districts
       visConfig: {opacity: 0.9, radiusRange: dataId === 'dong_daily' ? [6, 26] : [24, 90], outline: false, filled: true,
-        ...(range ? {colorRange: range} : {})}},
+        colorRange: colorRangeFor(x)}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile',
       sizeField: {name: x.key, type: 'real'}, sizeScale: heightScaleFor(x)}
   };
@@ -246,13 +270,13 @@ export function columnConfigFor(x: Variable, dataId: string) {
 
 // A static variable in 3D seen from afar (h:key): kepler's H3 layer on the areas' cells
 // (uhus.ts cellsOf), lying flat on the ground — a hex grid in the same quantile colours as
-// the areas (kepler's default ramp), the cells a little apart so it reads as a fine
-// stipple. Up close the raised areas take over (layers.ts cellView).
+// the areas, the cells a little apart so it reads as a fine stipple. Up close the raised
+// areas take over (layers.ts cellView).
 export function cellConfigFor(x: Variable, dataId: string) {
   return {
     id: cellIdOf(x.key), type: 'hexagonId',
     config: {dataId, label: x.short, columns: {hex_id: 'h3'}, isVisible: true,
-      visConfig: {opacity: 0.9, coverage: 0.72, enable3d: false}},
+      visConfig: {opacity: 0.9, coverage: 0.72, enable3d: false, colorRange: colorRangeFor(x)}},
     visualChannels: {colorField: {name: x.key, type: 'real'}, colorScale: 'quantile'}
   };
 }

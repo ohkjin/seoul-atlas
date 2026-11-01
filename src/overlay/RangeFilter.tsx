@@ -2,12 +2,12 @@ import {useEffect, useRef, useState} from 'react';
 import {fmt} from './focusValues';
 
 type Props = {domain: [number, number]; value: [number, number] | null; hist: number[]; unit: string;
-  count: [number, number] | null; onChange: (range: [number, number] | null) => void};
+  count: [number, number] | null; where?: string; onChange: (range: [number, number] | null) => void};
 
 // A value range on one variable, in the card that shows it: the variable's distribution
 // as bars, a band with two handles over it, the two ends, and how many places pass. The
 // band follows the pointer at once; the filter itself is updated at most once a frame.
-export default function RangeFilter({domain, value, hist, unit, count, onChange}: Props) {
+export default function RangeFilter({domain, value, hist, unit, count, where, onChange}: Props) {
   const [lo0, hi0] = domain;
   const span = hi0 - lo0 || 1;
   const [draft, setDraftState] = useState<[number, number]>(value ?? domain);
@@ -54,7 +54,7 @@ export default function RangeFilter({domain, value, hist, unit, count, onChange}
       </div>
       <div className="rf-vals">
         <span>{fmt(draft[0])}{unitText}</span>
-        {count && <span className="rf-count">{count[0]} / {count[1]} places</span>}
+        {count && <span className="rf-count">{count[0]} / {count[1]} places{where ? ` in ${where}` : ''}</span>}
         <span>{fmt(draft[1])}{unitText}</span>
       </div>
       {value && <button className="rf-reset" onClick={() => onChange(null)}>Clear filter</button>}

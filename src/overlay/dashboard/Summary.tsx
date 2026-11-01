@@ -3,7 +3,7 @@ import {VAR_BY_KEY, isTemporal, type Variable} from '../../data/catalog';
 import type {Place} from '../../data/uhus';
 import {fmt} from '../focusValues';
 import {placeSeries} from '../scatter';
-import {ourFiltersKey} from '../ourFilters';
+import {filtersKey} from '../ourFilters';
 import type {DashCtx} from './Dashboard';
 
 const DAY = 86400000;
@@ -33,7 +33,7 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
   // per-step dataset objects (see Dashboard)
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, tileVars, level, filters),
-    [tileVars, level, datasetKeys, day, ourFiltersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+    [tileVars, level, datasetKeys, day, filtersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
   const stats = useMemo(() => tileVars.map((x, i) => statsOf(series[i], code)), [series, code]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const date = new Date(day * DAY);
@@ -49,17 +49,19 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
           const s = stats[i];
           if (!s) return null;
           const isRhsi = x.key === RHSI?.key;
+          // the ▲▼ shown under the number; the place's tick on the strip takes its colour
+          const d = !code || s.value == null ? null : isRhsi ? (Math.exp(s.value) - 1) * 100 : s.delta(x);
           return (
             <div key={x.key} className="kpi">
               <div className="kpi-label">{isRhsi ? 'Heat sensitivity' : stripDaily(x.short)}
                 {isTemporal(x) && <span> · {dayLabel}</span>}</div>
               <div className="kpi-value">{fmt(code ? s.value : s.overall(x))}
-                {x.unit !== 'ratio' && x.unit !== 'log-ratio' && <small> {x.unit}</small>}</div>
-              {isRhsi && s.value != null && code ? (
-                <div className="kpi-sub"><Delta d={(Math.exp(s.value) - 1) * 100} pct />
+                {x.unit !== 'ratio' && <small> {x.unit}</small>}</div>
+              {isRhsi && d != null ? (
+                <div className="kpi-sub"><Delta d={d} pct />
                   <span> sales on hot days</span></div>
-              ) : code && s.value != null ? (
-                <div className="kpi-sub"><Delta d={s.delta(x)} pct={!x.signed && s.mean !== 0} />
+              ) : d != null ? (
+                <div className="kpi-sub"><Delta d={d} pct={!x.signed && s.mean !== 0} />
                   <span> vs avg {peerNoun}</span></div>
               ) : (
                 <div className="kpi-sub">range {fmt(s.min)} – {fmt(s.max)}</div>
@@ -69,6 +71,8 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
                   ? <>#{s.n - s.rank + 1} most sensitive of {s.n}</>
                   : <>#{s.rank} of {s.n} · top {Math.max(1, Math.round((s.rank / s.n) * 100))}%</>}</div>
               )}
+              <Strip values={series[i]} at={code ? s.value : null} median={s.median} d={d} />
+              <div className="kpi-ends"><span>{fmt(s.min)}</span><span>median {fmt(s.median)}</span><span>{fmt(s.max)}</span></div>
             </div>
           );
         })}
@@ -99,6 +103,27 @@ function statsOf(values: Map<string, number> | undefined, code: string | null) {
     // Seoul as a whole: totals add up, rates average
     overall: (x: Variable) => x.how === 'sum' ? all.reduce((a, b) => a + b, 0) : mean,
   };
+}
+
+// Where the place sits among its peers: a tick per peer, the median in white, the place's
+// own tick in the colour of its ▲▼ (warm above, cool below; neutral for Seoul, which has no tick).
+function Strip({values, at, median, d}: {values: Map<string, number> | undefined; at: number | null; median: number; d: number | null}) {
+  const W = 300, H = 22;
+  const vals = useMemo(() => (values ? [...values.values()] : []), [values]);
+  const ticks = useMemo(() => {
+    if (!vals.length) return null;
+    const lo = Math.min(...vals), hi = Math.max(...vals), x = (v: number) => 2 + ((v - lo) / (hi - lo || 1)) * (W - 4);
+    return {x, peers: vals.map((v, i) => <line key={i} className="kpi-peer" x1={x(v)} x2={x(v)} y1={7} y2={15} />)};
+  }, [vals]);
+  if (!ticks) return null;
+  const tone = d == null || Math.abs(d) < 1e-9 ? 'flat' : d > 0 ? 'up' : 'down';
+  return (
+    <svg className="kpi-strip" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden>
+      {ticks.peers}
+      <line className="kpi-median" x1={ticks.x(median)} x2={ticks.x(median)} y1={3} y2={19} />
+      {at != null && <line className={`kpi-at ${tone}`} x1={ticks.x(at)} x2={ticks.x(at)} y1={0} y2={H} />}
+    </svg>
+  );
 }
 
 // Above the average warm, below it cool — the map's blue-red, not good and bad.

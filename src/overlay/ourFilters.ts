@@ -14,9 +14,10 @@ export type Ranges = Record<string, [number, number]>;
 export const ourFilterId = (key: string) => `ours:${key}`;
 export const isOurFilterId = (id: string) => id.startsWith('ours:');
 const DATASETS = ['dong', 'gu', 'dong_daily', 'gu_daily', 'dong_pair', 'gu_pair', 'dong_cells', 'gu_cells'];
-// What the panels' memos watch besides the day: the ranges of our filters.
-export const ourFiltersKey = (filters: any[]) =>
-  (filters || []).filter((f: any) => isOurFilterId(f.id)).map((f: any) => `${f.id}:${f.value}`).join('|');
+// What the panels' memos watch besides the day: every filter but the playing day's — the
+// atlas's own and any added in kepler's Filters tab, which the panels read too.
+export const filtersKey = (filters: any[]) =>
+  (filters || []).filter((f: any) => f.id !== 'time').map((f: any) => `${f.id}:${f.name}:${f.value}`).join('|');
 
 // A filter on several datasets, built one dataset at a time with its field set in the
 // same action: kepler filtered in between with no field name and logged an error.

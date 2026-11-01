@@ -11,7 +11,23 @@ const pending = new Map<string, Promise<void>>();
 
 export const isIndustry = (key: string) => !!VAR_BY_KEY[key]?.industry;
 export const industryLoaded = (key: string) => loaded.has(key);
-export const loadedIndustries = () => [...loaded.keys()];
+
+// A place's own value — RHSI, a share — joined onto the daily tables too once a filter is
+// set on it: kepler filters each table on its own columns, so only then does the filter
+// reach the daily rows (the bubbles, kepler's own time chart). By place code, every day alike.
+type Areas = {fields: any[]; rows: any[][]};
+const statics = new Map<string, Record<'gu' | 'dong', Map<string, unknown>>>();
+export function joinStatic(key: string, areas: Record<'gu' | 'dong', Areas | undefined>) {
+  if (statics.has(key)) return false;
+  const byCode = (t: Areas | undefined, codeName: string) => {
+    const k = t?.fields.findIndex((f) => f.name === key) ?? -1, c = t?.fields.findIndex((f) => f.name === codeName) ?? -1;
+    return new Map<string, unknown>(k < 0 || c < 0 ? [] : t!.rows.map((r) => [String(r[c]), r[k]]));
+  };
+  statics.set(key, {gu: byCode(areas.gu, 'gu_code'), dong: byCode(areas.dong, 'dong_code')});
+  return true;
+}
+// what the daily tables carry beyond their own: the industries loaded and the values joined
+export const dailyExtras = () => [...loaded.keys(), ...statics.keys()];
 
 export function loadIndustries(keys: string[]): Promise<void> {
   return Promise.all(keys.filter((k) => isIndustry(k) && !loaded.has(k)).map((k) => {
@@ -30,17 +46,23 @@ export function loadIndustries(keys: string[]): Promise<void> {
 
 const DAY0 = Date.UTC(2024, 0, 1);
 
-// A daily table (kepler's {fields, rows}) with a column for every industry loaded so far that
-// it lacks, matched by place code and day. `level` says whose values: districts or dongs.
+// A daily table (kepler's {fields, rows}) with a column for every industry loaded so far, and
+// every place value joined, that it lacks — matched by place code (and day, for an industry).
+// `level` says whose values: districts or dongs.
 export function withIndustries<T extends {fields: any[]; rows: any[][]}>(table: T, level: 'gu' | 'dong'): T {
-  const keys = [...loaded.keys()].filter((k) => !table.fields.some((f) => f.name === k));
+  const keys = dailyExtras().filter((k) => !table.fields.some((f) => f.name === k));
   if (!keys.length) return table;
   const code = table.fields.findIndex((f) => f.name === (level === 'gu' ? 'gu_code' : 'dong_code'));
   const date = table.fields.findIndex((f) => f.name === 'date');
-  const files = keys.map((k) => loaded.get(k)![level]);
+  const cell = keys.map((k) => {
+    const file = loaded.get(k)?.[level];
+    if (file) return (place: string, day: number) => file[place]?.[day] ?? null;
+    const values = statics.get(k)![level];
+    return (place: string) => values.get(place) ?? null;
+  });
   const rows = table.rows.map((r) => {
     const day = Math.round((Date.parse(`${String(r[date]).slice(0, 10)}T00:00:00Z`) - DAY0) / 86400000);
-    return [...r, ...files.map((f) => f[String(r[code])]?.[day] ?? null)];
+    return [...r, ...cell.map((c) => c(String(r[code]), day))];
   });
   const fields = [...table.fields, ...keys.map((name) =>
     ({name, type: 'real', format: '', analyzerType: 'FLOAT', displayName: displayNameOf(name)}))];

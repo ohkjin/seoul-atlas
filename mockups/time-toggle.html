@@ -1,0 +1,65 @@
+<!doctype html>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<!-- Mockup: the filtered time card as B (share: both filled on one scale) by default, with a
+     two-way switch where the key was to see it as C (shape: the filtered line on its own
+     scale). The switch only shows while a filter is on. Same made-up year as time-filtered. -->
+<style>
+  :root { --ink: #eef2f7; --ink-2: #c4cbd5; --ink-3: #6f7886; --accent: #e8a35c; --line: rgba(255,255,255,0.08); }
+  body { margin: 0; background: #0b0d11; color: var(--ink); font-family: Inter, system-ui, sans-serif; padding: 24px; width: 760px; }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+  .opt { font: 600 13px Inter; color: var(--accent); margin: 0 0 4px; }
+  .how { font-size: 11.5px; color: #a9b2bf; margin: 0 0 12px; line-height: 1.55; min-height: 54px; } .how b { color: var(--ink); font-weight: 500; }
+  .card { background: rgba(22,25,31,0.94); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; }
+  .day { font-size: 20px; font-weight: 300; } .dow { font-size: 11px; color: var(--ink-3); letter-spacing: .08em; margin-top: 2px; }
+  .speed { display: flex; align-items: flex-start; gap: 2px; font-size: 11px; color: var(--ink-3); } .speed span { padding: 3px 8px; border-radius: 999px; }
+  .speed span.on { color: var(--ink); background: rgba(255,255,255,0.08); }
+  svg.chart { display: block; width: 100%; height: 64px; margin: 10px 0; border-radius: 8px; background: rgba(255,255,255,0.02); }
+  .foot { display: flex; align-items: center; gap: 10px; }
+  .play { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11px; }
+  .var { flex: 1; font-size: 12px; color: var(--ink-2); line-height: 1.3; } .var small { display: block; color: var(--accent); font-size: 10.5px; }
+  .now { font-size: 15px; font-weight: 300; text-align: right; line-height: 1.2; } .now small { display: block; font-size: 10.5px; color: var(--ink-3); }
+  .row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .key { display: flex; gap: 12px; font-size: 10.5px; color: var(--ink-3); } .key i { display: inline-block; width: 10px; height: 8px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  .sw { display: inline-flex; border: 1px solid rgba(255,255,255,0.12); border-radius: 999px; padding: 2px; font-size: 10.5px; }
+  .sw span { padding: 2px 9px; border-radius: 999px; color: var(--ink-3); } .sw span.on { background: rgba(255,255,255,0.12); color: var(--ink); }
+</style>
+<body>
+<div class="grid" id="g"></div>
+<script>
+const W = 288, H = 64, N = 366, DAY = 160;
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const total = [], kept = [];
+for (let i = 0; i < N; i++) {
+  const dow = (i + 1) % 7, week = dow === 0 || dow === 6 ? 0.82 : 1;
+  const season = 1 + 0.12 * Math.sin((i - 60) / N * 2 * Math.PI);
+  const v = 1150 * season * week * (0.94 + 0.12 * rnd());
+  total.push(v); kept.push(v * (0.31 - (i > 170 && i < 240 ? 0.04 : 0)) * (0.93 + 0.14 * rnd()));
+}
+const path = (vals, lo, hi) => 'M' + vals.map((v, i) => `${(i / (N - 1) * W).toFixed(1)},${(H - 4 - (v - lo) / (hi - lo) * (H - 8)).toFixed(1)}`).join('L');
+const area = (d) => `${d}L${W},${H}L0,${H}Z`;
+const ext = (a) => [Math.min(...a), Math.max(...a)];
+const head = `<line x1="${DAY / (N - 1) * W}" x2="${DAY / (N - 1) * W}" y1="0" y2="${H}" stroke="#eef2f7" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+const hi = Math.max(...total);
+const share = `<path d="${area(path(total, 0, hi))}" fill="rgba(255,255,255,0.10)"/><path d="${area(path(kept, 0, hi))}" fill="rgba(232,163,92,0.45)"/>`;
+const shape = `<path d="${path(total, ...ext(total))}" fill="none" stroke="rgba(255,255,255,0.32)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>`
+  + `<path d="${area(path(kept, ...ext(kept)))}" fill="rgba(232,163,92,0.12)"/><path d="${path(kept, ...ext(kept))}" fill="none" stroke="#e8a35c" stroke-width="1.5" vector-effect="non-scaling-stroke"/>`;
+const card = (svg, mode, key) => `
+  <div class="card">
+    <div class="head"><div><div class="day">2024-06-08</div><div class="dow">SATURDAY</div></div>
+      <div class="speed"><span>0.5×</span><span class="on">1×</span><span>2×</span><span>↗</span></div></div>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${svg}${head}</svg>
+    <div class="foot"><span class="play">▶</span>
+      <span class="var">Retail sales (daily)<small>filtered · 9 / 22 in Gangnam-gu</small></span>
+      <span class="now">298억 · 29%<small>all 1,034억</small></span></div>
+    <div class="row"><div class="key">${key}</div>
+      <div class="sw"><span class="${mode === 'share' ? 'on' : ''}">Share</span><span class="${mode === 'shape' ? 'on' : ''}">Shape</span></div></div>
+  </div>`;
+document.getElementById('g').innerHTML = `
+  <div><div class="opt">Share (default) · B</div><p class="how">How much of the whole passes: both <b>filled on one scale</b>. The switch at the right only shows while a filter is on.</p>
+    ${card(share, 'share', '<span><i style="background:rgba(232,163,92,0.6)"></i>passes</span><span><i style="background:rgba(255,255,255,0.18)"></i>all</span>')}</div>
+  <div><div class="opt">Shape · C</div><p class="how">One click: the filtered places' line on <b>its own scale</b>, the whole as a faint line — how their year moves. The 29% stays in the words.</p>
+    ${card(shape, 'shape', '<span><i style="background:#e8a35c;height:2px"></i>passes</span><span><i style="background:rgba(255,255,255,0.4);height:2px"></i>all</span>')}</div>`;
+</script>
+</body>

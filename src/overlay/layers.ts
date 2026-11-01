@@ -4,7 +4,7 @@ import {VAR_BY_KEY, cellConfigFor, cellIdOf, columnConfigFor, columnIdOf, isTemp
   type Variable} from '../data/catalog';
 import type {UhusData} from '../data/uhus';
 import {OUTLINE_LAYER_ID} from './outline';
-import {PAIR_FIELD, addPair, cellMixedIdOf, cellPairConfig, cellPairIdOf, columnPairIdOf, dailyRaisedCellsConfig, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
+import {PAIR_FIELD, addPair, pairStyleOf, rememberPairStyle, cellMixedIdOf, cellPairConfig, cellPairIdOf, columnPairIdOf, dailyRaisedCellsConfig, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
   pairVisConfig} from './pair';
 
 // The selection is what the map is about: the main first — always exactly one, the colour,
@@ -138,8 +138,8 @@ export const isOurs = (id: string) => ['v:', 'c:', 'h:', 'bi:', 'bc:', 'hb:', 'h
 // change — never on kepler's own visibility, so the eye in kepler's panel works on its
 // own in between. `get` reads the latest state, as each step builds on the last.
 export function drawSelection(dispatch: Dispatch, get: GetVisState,
-  opts: {selection: string[]; linked: boolean; grain: Grain; is3d: boolean; data: UhusData; modeOnly?: boolean}) {
-  const {selection, linked, grain, is3d, data, modeOnly} = opts;
+  opts: {selection: string[]; linked: boolean; grain: Grain; is3d: boolean; data: UhusData}) {
+  const {selection, linked, grain, is3d, data} = opts;
   const plan = planFor(selection, linked, grain, is3d);
   const want = new Set(plan.layers);
   const find = (vs: any, id: string) => vs.layers.find((l: any) => l.id === id);
@@ -167,7 +167,10 @@ export function drawSelection(dispatch: Dispatch, get: GetVisState,
   for (const id of Object.keys(vs.datasets)) {
     if (!isPairDataId(id)) continue;
     const keep = pairId && id === pairDataId && (find(vs, pairId)?.config.dataId === id || onItsWay);
-    if (!keep) dispatch(removeDataset(id));
+    if (keep) continue;
+    // what a person set on it comes back with it, in this grain or the next
+    for (const l of vs.layers) if (l.config.dataId === id && pairKeysOf(l.id)) rememberPairStyle(l, pairMode.get(l.id) ?? is3d);
+    dispatch(removeDataset(id));
   }
   vs = get();
   if (plan.areaPair && !find(vs, pairId!) && !onItsWay) {
@@ -210,14 +213,18 @@ export function drawSelection(dispatch: Dispatch, get: GetVisState,
     }
   }
 
-  // On a 2D ↔ 3D switch alone, a layer hidden with the eye in kepler's panel passes that
-  // on to its twin (points ↔ columns) instead of coming back.
+  // A layer hidden with the eye in kepler's panel stays hidden — off but not `hidden`,
+  // which only this code sets — through a grain change, and on a 2D ↔ 3D switch it passes
+  // that on to its twin (points ↔ columns) instead of coming back. (A layer this code took
+  // off is `hidden`, so a twin left from an earlier selection never counts.) Read before any
+  // change: kepler updates a layer's config in place, so a twin turned off a step earlier
+  // in this loop would already look like ours.
   vs = get();
+  const userHidden = new Set(vs.layers.filter((l: any) => isOurs(l.id) && !l.config.isVisible && !l.config.hidden).map((l: any) => l.id));
   for (const l of vs.layers) {
     if (!isOurs(l.id)) continue;
     if (want.has(l.id)) {
-      const twin = modeOnly ? twinsOf(l.id).map((t) => find(vs, t)).find(Boolean) : null;
-      const userHid = !!twin && !twin.config.isVisible && !twin.config.hidden;
+      const userHid = userHidden.has(l.id) || twinsOf(l.id).some((t) => userHidden.has(t));
       if (userHid) { if (l.config.isVisible || l.config.hidden) dispatch(layerConfigChange(l, {isVisible: false, hidden: false} as any)); }
       else if (!l.config.isVisible || l.config.hidden) dispatch(layerConfigChange(l, {isVisible: true, hidden: false} as any));
     } else if (l.config.isVisible || !l.config.hidden) {
@@ -247,7 +254,7 @@ export function hideLayer(dispatch: Dispatch, layer: any) {
 
 // 2D ↔ 3D for the neighbourhood pair: the bivariate grid lies flat, colour + height
 // stands up. Restyled only on a real switch, so a colour field or palette picked in
-// kepler's panel otherwise stays.
+// kepler's panel otherwise stays — and what was set in each mode comes back with it.
 const pairMode = new Map<string, boolean>();
 // The area pair last asked of kepler and not seen on the map yet (see drawSelection).
 let pendingPair: {layerId: string; dataId: string; at: number} | null = null;
@@ -256,13 +263,14 @@ export function restylePair(dispatch: Dispatch, visState: any, is3d: boolean) {
     && visState.datasets?.[l.config.dataId]);
   const keys = layer && pairKeysOf(layer.id);
   if (!layer || !keys || pairMode.get(layer.id) === is3d) return;
+  rememberPairStyle(layer, !is3d);
   pairMode.set(layer.id, is3d);
   const [a, b] = keys.map((k: string) => VAR_BY_KEY[k]);
   const wantField = is3d ? a.key : PAIR_FIELD;
   const field = visState.datasets[layer.config.dataId]?.fields.find((f: any) => f.name === wantField);
   const channel: any = pairColourChannel(a, is3d);
   if (field) dispatch(layerVisualChannelConfigChange(layer, {colorField: field, colorScale: channel.colorScale} as any,
-    'color', pairVisConfig(a, b, is3d) as any));
+    'color', {...pairVisConfig(a, b, is3d), ...pairStyleOf(layer.id, is3d)?.visConfig} as any));
 }
 
 // Drawing order, front to back: daily points, then the area layers. kepler draws the
@@ -330,6 +338,10 @@ export function openMapSettings(dispatch: Dispatch, visState: any) {
 // The hover tooltip names the place and lists the value of every variable on the map.
 // kepler stores tooltip fields per dataset — grouped by where each layer is drawn now.
 const tooltipWritten = new WeakSet<object>();   // datasets (by their data) whose list this code set
+// per dataset: what this code last wrote, and what a person has since taken out of it in the
+// Interactions tab — those stay out, even the place names and the variables on the map
+const tooltipLast = new Map<string, {names: string[]; data: object | undefined}>();
+const tooltipRemoved = new Map<string, Set<string>>();
 export function syncTooltip(dispatch: Dispatch, visState: any) {
   const tooltip = visState?.interactionConfig?.tooltip;
   if (!tooltip) return;
@@ -347,7 +359,16 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
     ...['dong_cells', 'gu_cells'].filter((d) => visState.datasets?.[d])];
   for (const id of ids) {
     // a pair's tooltip also names its class, e.g. "RHSI high · Elderly low"
-    const required = [...names(id), ...varsIn(id), ...(isPairDataId(id) ? [f(PAIR_FIELD)] : [])];
+    const had0: any[] = current[id] || [];
+    const removed = tooltipRemoved.get(id) ?? new Set<string>();
+    // (only against the same data: a rebuilt table — an industry's column joining it —
+    // may come back with kepler's own list, which no person chose)
+    const last = tooltipLast.get(id);
+    if (last && last.data === visState.datasets[id]?.dataContainer)
+      for (const name of last.names) if (!had0.some((h) => h.name === name)) removed.add(name);
+    for (const h of had0) removed.delete(h.name);   // put back by hand: in again
+    tooltipRemoved.set(id, removed);
+    const required = [...names(id), ...varsIn(id), ...(isPairDataId(id) ? [f(PAIR_FIELD)] : [])].filter((r) => !removed.has(r.name));
     // Fields added in kepler's Interactions tab stay, and so do number formats set
     // there; only variables that left the map drop out. A dataset this code has not
     // written for yet carries kepler's own first-five default instead — not kept.
@@ -359,6 +380,7 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
         && had.findIndex((o) => o.name === h.name) === i)
       : [];
     next[id] = [...kept, ...extras];
+    tooltipLast.set(id, {names: next[id].map((x) => x.name), data: dc});
     if (dc) tooltipWritten.add(dc);
   }
   if (JSON.stringify(next) === JSON.stringify(tooltip.config?.fieldsToShow)) return;

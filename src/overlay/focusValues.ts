@@ -113,20 +113,24 @@ export function extentOf(dataset: any, key: string): [number, number] | null {
 }
 
 // A field's distribution in equal bins over [lo, hi] — every row (a daily variable: the
-// whole year), counted once per rows and kept.
+// whole year), or only the rows whose `scope.field` is one of `scope.codes` (a district's
+// neighbourhoods); counted once per rows and scope, and kept.
+export type Scope = {id: string; field: string; codes: Set<string>};
 const histCache = new WeakMap<object, Map<string, number[]>>();
-export function histogramOf(dataset: any, key: string, extent: [number, number], bins = 24): number[] {
+export function histogramOf(dataset: any, key: string, extent: [number, number], bins = 24, scope?: Scope): number[] {
   const field = dataset?.fields?.find((f: any) => f.name === key);
   if (!field) return [];
   const dc = dataset.dataContainer;
   let byKey = histCache.get(dc);
   if (!byKey) { byKey = new Map(); histCache.set(dc, byKey); }
-  const id = `${key}:${extent[0]}:${extent[1]}:${bins}`;
+  const id = `${key}:${extent[0]}:${extent[1]}:${bins}:${scope?.id ?? ''}`;
   let h = byKey.get(id);
   if (!h) {
     h = new Array(bins).fill(0);
     const col = numericColumn(dataset, field), span = extent[1] - extent[0] || 1;
+    const at = scope ? dataset.fields.findIndex((f: any) => f.name === scope.field) : -1;
     for (let i = 0; i < col.length; i++) {
+      if (at >= 0 && !scope!.codes.has(String(dc.valueAt(i, at)))) continue;
       const v = col[i];
       if (Number.isFinite(v)) h[Math.min(bins - 1, Math.max(0, Math.floor(((v - extent[0]) / span) * bins)))]++;
     }
@@ -156,6 +160,29 @@ export function valuesByPlace(dataset: any, field: string, keyField: string, fil
     if (Number.isFinite(col[r])) out.set(String(dc.valueAt(r, k)), col[r]);
   }
   return out;
+}
+
+// Which rows of a daily table pass the value filters — the atlas's own and any added in
+// kepler's Filters tab — with the time window left out, as the time chart is the whole year.
+// A filter on this table is checked per row (that day's value); one on the areas per place,
+// through `areas` (the area dataset of the same level, its places keyed by `keyField` in
+// both). null when none apply.
+export function rowFilter(daily: any, areas: any, keyField: string, filters: any[]): ((r: number) => boolean) | null {
+  const ours = (filters || []).filter((f: any) => f.id !== 'time');
+  if (!daily || !ours.length) return null;
+  const rowChecks = rangeChecks(daily, ours);
+  const onAreas = ours.filter((f: any) => !(f.dataId || []).includes(daily.id));
+  let places: Set<string> | null = null;
+  const areaChecks = areas && onAreas.length ? rangeChecks(areas, onAreas) : [];
+  const ak = areas?.fields.findIndex((f: any) => f.name === keyField) ?? -1;
+  if (areaChecks.length && ak >= 0) {
+    places = new Set();
+    for (let r = 0; r < areaChecks[0].col.length; r++)
+      if (areaChecks.every((c) => c.col[r] >= c.lo && c.col[r] <= c.hi)) places.add(String(areas.dataContainer.valueAt(r, ak)));
+  }
+  if (!rowChecks.length && !places) return null;
+  const k = daily.fields.findIndex((f: any) => f.name === keyField), dc = daily.dataContainer;
+  return (r) => rowChecks.every((c) => c.col[r] >= c.lo && c.col[r] <= c.hi) && (!places || places.has(String(dc.valueAt(r, k))));
 }
 
 // One value per day across the whole year for one place (or all of them): rows matched

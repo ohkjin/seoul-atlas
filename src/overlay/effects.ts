@@ -1,4 +1,4 @@
-import {addEffect, addLayer, layerVisConfigChange, removeEffect, removeLayer, updateLayerBlending} from '@kepler.gl/actions';
+import {addEffect, addLayer, layerVisConfigChange, removeEffect, removeLayer, toggleLayerForMap, updateLayerBlending} from '@kepler.gl/actions';
 import {isOurs} from './layers';
 
 type Dispatch = (a: any) => void;
@@ -85,4 +85,12 @@ export function syncHalos(dispatch: Dispatch, get: GetVisState, on: boolean) {
       dispatch(layerVisConfigChange(halo, {colorRange: colours}));
     }
   }
+  // side by side, a halo shows only on its bubbles' half: kepler puts a new layer on both,
+  // and the other variable's glow then ringed each bubble in the wrong colours
+  (get().splitMaps || []).forEach((_: any, i: number) => {
+    for (const [id, base] of wanted as Map<string, any>) {
+      const on = !!get().splitMaps[i]?.layers?.[base.id];
+      if (!!get().splitMaps[i]?.layers?.[id] !== on) dispatch(toggleLayerForMap(i, id));
+    }
+  });
 }
