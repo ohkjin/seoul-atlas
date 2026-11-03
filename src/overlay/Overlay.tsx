@@ -595,7 +595,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
         period={period} onPeriod={setPeriod} day={playDay != null ? playDay * 86400000 : null} bands={bands}
         loading={Object.values(industryLoading).filter(Boolean) as string[]} />}
       {ready && dashboardOpen && !sandbox && (
-        <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing} only={onlyProject}
+        <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing} only={onlyProject} period={period}
           onSelect={select} onClose={() => setDashboardOpen(false)}
           onPick={(level, code) => {
             if (level === 'dong') { const d = data!.dongs.find((x) => x.code === code); if (d) focusDong(d); }

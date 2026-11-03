@@ -178,14 +178,45 @@ const VAR_SPAN: Record<string, [string, string]> = {delta_daypop: ['2024-01-01',
 // The days a variable's data covers, from its dataset, as [first midnight, last midnight] (UTC):
 // null for a snapshot (land use, the model's outputs) — it holds whatever period is picked.
 export function spanOf(key: string): [number, number] | null {
-  const s = VAR_SPAN[key] ?? SOURCES.find((x) => x.vars.includes(key))?.span;
+  const source = SOURCES.find((x) => x.vars.includes(key));
+  const s = VAR_SPAN[key] ?? (DEMO_COVERAGE && source ? DEMO_SPAN[source.id] : undefined) ?? source?.span;
   return s ? [Date.parse(s[0]), Date.parse(s[1])] : null;
 }
+// ?demo=coverage (for the video): the time ruler's expand shows each public dataset over the years Seoul
+// actually publishes it (checked on the Open Data Plaza, 2026-11-04), not only the year the atlas loaded —
+// placeholder spans, no data behind them outside 2024. Held inside the ruler's range (2015 – Sep 2026);
+// the restricted card sales stay 2024. Off by default, so the app never claims days it does not have.
+export const DEMO_COVERAGE = typeof location !== 'undefined' && new URLSearchParams(location.search).get('demo') === 'coverage';
+const DEMO_SPAN: Record<string, [string, string]> = {
+  weather: ['2015-01-01', '2026-09-30'],   // KMA Seoul (ASOS 108) daily observations, published since 1907
+  bus: ['2015-01-01', '2026-09-30'],       // OA-12912 from BUS_STATION_BOARDING_MONTH_2015
+  bike: ['2017-01-01', '2026-06-30'],      // OA-15246 from 2017년_자전거이용통계_일
+  livepop: ['2017-01-01', '2026-07-31'],   // OA-14991 from LOCAL_PEOPLE_DONG_2017 (the older method)
+};
+// The Data page's Period line: with ?demo=coverage, the demo span in place of the written one
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthYear = (iso: string) => `${MON[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
+export const periodTextOf = (s: DataSource) => {
+  const demo = DEMO_COVERAGE ? DEMO_SPAN[s.id] : undefined;
+  return demo ? `Day · ${monthYear(demo[0])} – ${monthYear(demo[1])}` : s.time;
+};
+export const isDemoSpan = (key: string) => DEMO_COVERAGE && !!DEMO_SPAN[SOURCES.find((x) => x.vars.includes(key))?.id ?? ''];
 // a snapshot's date, where its data records one (none does yet: Data_schema.csv gives no years)
 export function asOfOf(key: string): number | null {
-  const d = SOURCES.find((x) => x.vars.includes(key))?.asOf;
+  const d = (DEMO_COVERAGE ? DEMO_AS_OF[key] : undefined) ?? SOURCES.find((x) => x.vars.includes(key))?.asOf;
   return d ? Date.parse(d) : null;
 }
+// ?demo=coverage: a snapshot's date as its public source would give it — placeholders, as the UHUS schema
+// records none: the land-cover map (EGIS), the official land price (its 1 January base date), the building
+// register (aged housing), the resident register (elderly), the basic-livelihood register (low income),
+// business licences (activity venues), station and stop locations (subway access, bus stops), parking lots
+const DEMO_AS_OF: Record<string, string> = {
+  residential_area_share: '2022-12-31', commercial_area_share: '2022-12-31', leisure_area_share: '2022-12-31',
+  transportation_area_share: '2022-12-31', public_facility_area_share: '2022-12-31', green_space_share: '2022-12-31',
+  land_price: '2024-01-01', aged_housing_share: '2023-12-31', activity_facility_density: '2024-06-30',
+  elderly_share: '2024-06-30', low_income_share: '2023-12-31', dnpr: '2024-06-30',
+  subway_access_coverage: '2024-12-31', bus_stop_density: '2024-12-09', parking_capacity: '2023-12-31',
+};
 // every day the atlas has data for: the time ruler's whole length
 export const DATA_SPAN: [number, number] = (() => {
   const spans = SOURCES.flatMap((x) => (x.span ? [[Date.parse(x.span[0]), Date.parse(x.span[1])]] : []));

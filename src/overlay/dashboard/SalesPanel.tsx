@@ -63,7 +63,7 @@ export function Year({W, vals, hot, mild, y0, h, name, change, note, seoul, bars
       <line className="sp-base" x1={0} x2={W} y1={y0 + h} y2={y0 + h} />
       {axis != null && niceTicks(lo, hi, false, 4).map((t) => (
         <g key={`t${t}`}><line className="sp-grid" x1={0} x2={W} y1={Y(t)} y2={Y(t)} />
-          <text className="sp-month" x={W} y={Y(t) - 3} textAnchor="end">{t}{axis}</text></g>
+          <text className="sp-month" x={W} y={Y(t) - 3} textAnchor="end">{Math.abs(t) >= 1000 ? t.toLocaleString('en-US') : t}{axis}</text></g>
       ))}
       {seoul && !bars && <polyline className="sp-seoul" points={line(weekOf(seoul))} />}
       {bars

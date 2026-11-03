@@ -1,6 +1,6 @@
 import {ArrowUpRight, Link2} from 'lucide-react';
 import {VAR_BY_KEY} from '../../data/catalog';
-import {KIND_LABEL, ROLES, SOURCES, type DataSource} from '../../data/sources';
+import {KIND_LABEL, ROLES, SOURCES, periodTextOf, type DataSource} from '../../data/sources';
 import {PROJECTS} from '../../data/projects';
 import InfoTip from '../InfoTip';
 import Page from './Page';
@@ -95,7 +95,7 @@ function Card({s, selection, onPick, out = false}: {s: DataSource; selection: st
       {s.how && <p className="ds-how"><b>How it was made</b> {s.how}</p>}
       <dl className="ds-meta">
         <div><dt>Unit</dt><dd>{s.space}</dd></div>
-        <div><dt>Period</dt><dd>{s.time}</dd></div>
+        <div><dt>Period</dt><dd>{periodTextOf(s)}</dd></div>
         <div><dt>Source</dt><dd>{s.source}</dd></div>
         {/* public data: which studies use it (a study's own data sits under that study) */}
         {s.kind === 'public' && s.projects.length > 0 && <div><dt>Used by</dt><dd>{s.projects.join(', ')}</dd></div>}

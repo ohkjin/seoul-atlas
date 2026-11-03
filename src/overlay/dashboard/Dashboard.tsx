@@ -14,6 +14,7 @@ import MiniMaps from './MiniMaps';
 import ShapPanel from './ShapPanel';
 import SalesPanel, {isSalesKey} from './SalesPanel';
 import WeatherPanel, {isWeatherKey} from './WeatherPanel';
+import DailyPanel, {isDailyPublicKey} from './DailyPanel';
 import EffectPanel, {isInputKey} from './EffectPanel';
 import DistrictPanel from './DistrictPanel';
 import {uiZoom} from '../uiScale';
@@ -23,6 +24,8 @@ import Summary from './Summary';
 type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean; grain: Grain; is3d: boolean; playing: boolean;
   // the study the atlas is narrowed to (the top bar's "Only UHUS"), or null for everything
   only: string | null;
+  // the time ruler's period, [first midnight, the midnight after the last day) UTC
+  period: [number, number];
   onPick: (level: 'dong' | 'gu', code: string) => void; onSelect: (key: string) => void; onClose: () => void};
 
 // What every panel reads: the selection's values per place now, and the map's state.
@@ -105,11 +108,12 @@ export default function Dashboard(props: Props) {
   const placeName = focus.level === 'seoul' ? 'Seoul' : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
   // The last panels follow what is on the map, the main's first: sales bring their year
   // (SalesPanel), RHSI or a SHAP contribution its drivers (ShapPanel), daily weather its year
-  // in the same frame (WeatherPanel), one of the model's inputs what it does to RHSI
+  // in the same frame (WeatherPanel), a public daily dataset its days over the time ruler's period
+  // (DailyPanel), one of the model's inputs what it does to RHSI
   // (EffectPanel), anything else its neighbourhoods by district (DistrictPanel). One of a kind.
   const wide = vars.map((x) => ({key: x.key, kind: isSalesKey(x.key) ? 'sales'
     : x.key === 'RHSI_retail' || x.key.startsWith('shap_') ? 'shap'
-    : isWeatherKey(x.key) ? 'weather' : isInputKey(x.key) ? 'effect' : x.dataset === 'dong' ? 'district' : null}))
+    : isWeatherKey(x.key) ? 'weather' : isDailyPublicKey(x.key) ? 'daily' : isInputKey(x.key) ? 'effect' : x.dataset === 'dong' ? 'district' : null}))
     .filter((w, i, a): w is {kind: string; key: string} => !!w.kind && a.findIndex((v) => v.kind === w.kind) === i)
     // the SHAP panel is the longest, so it always comes last
     .sort((a, b) => Number(a.kind === 'shap') - Number(b.kind === 'shap'));
@@ -119,6 +123,7 @@ export default function Dashboard(props: Props) {
       case 'sales': return panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />, true);
       case 'shap': return panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />, true);
       case 'weather': return panel('weather', 'Weather — the year, and the heat', <WeatherPanel ctx={ctx} weatherKey={w.key} />, true);
+      case 'daily': return panel('daily', `${name(w.key)} — over the period`, <DailyPanel ctx={ctx} dailyKey={w.key} />, true);
       case 'effect': return panel('effect', `${name(w.key)} — what it does to heat sensitivity`, <EffectPanel ctx={ctx} inputKey={w.key} />, true);
       default: return panel('district', `${name(w.key)} — by district`, <DistrictPanel ctx={ctx} varKey={w.key} />, true);
     }

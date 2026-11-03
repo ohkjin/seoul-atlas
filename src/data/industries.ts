@@ -161,3 +161,21 @@ export function industrySeries(key: string, level: 'gu' | 'dong' | 'seoul', code
   const all = Object.values(file.gu);
   return all[0] ? all[0].map((_, i) => all.reduce((s, v) => s + (v[i] || 0), 0)) : null;
 }
+
+// A variable's days from..to (UTC midnights, `to` left out) out of its year files loaded, one row
+// per place of the level; NaN where a day's year is not loaded. The dashboard's daily panel reads
+// it over the time ruler's period (the years beyond 2024 load as Overlay moves the period).
+export function dailyOver(key: string, level: 'gu' | 'dong', from: number, to: number): Map<string, number[]> {
+  const n = Math.max(0, Math.round((to - from) / DAY)), out = new Map<string, number[]>();
+  const files = loaded.get(key);
+  for (let i = 0; i < n; i++) {
+    const t = from + i * DAY, y = new Date(t).getUTCFullYear(), rows = files?.get(y)?.[level];
+    if (!rows) continue;
+    const at = Math.round((t - Date.UTC(y, 0, 1)) / DAY);
+    for (const code in rows) {
+      const v = rows[code][at];
+      (out.get(code) ?? out.set(code, new Array(n).fill(NaN)).get(code)!)[i] = typeof v === 'number' ? v : NaN;
+    }
+  }
+  return out;
+}

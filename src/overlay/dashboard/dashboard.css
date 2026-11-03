@@ -24,3 +24,8 @@
   background: rgba(238, 242, 247, 0.4); }
 .mm-prof-track .peer:hover { background: var(--ink); z-index: 2; }
 .mm-prof-track .dot { z-index: 1; pointer-events: none; }
+
+/* a public daily dataset over the ruler's period (DailyPanel.tsx): the Sales panel's frame, its
+   number and marked row in ink as in the weather panel */
+.daily .sp-big { color: var(--ink); }
+.daily .sp-name.marked { fill: var(--ink); }

@@ -1,6 +1,6 @@
 import {useMemo, useRef, useState} from 'react';
 import {ChevronUp} from 'lucide-react';
-import {DATA_SPAN, asOfOf, coversPeriod, spanOf} from '../data/sources';
+import {DATA_SPAN, asOfOf, coversPeriod, isDemoSpan, spanOf} from '../data/sources';
 import {useVisState} from './useKepler';
 import {numericColumn} from './focusValues';
 import {THEMES, VAR_BY_KEY, isTemporal, topVarsOf, type Variable} from '../data/catalog';
@@ -242,7 +242,7 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
         onKeyDown={pickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(x.key); } } : undefined}>
         <span className="tr-nm" style={{left: `${Math.max(0, start)}%`}}>{x.short}<small>{kindText(x, kind)}</small></span>
         {/* over many years, only the years in the period are on the tables: its whole span instead */}
-        {kind === 'daily' && ((x.years ? null : runs[x.key]) ?? [[span![0], span![1] + DAY]]).map(([s, e], i) => bar(s, e, i))}
+        {kind === 'daily' && ((x.years || isDemoSpan(x.key) ? null : runs[x.key]) ?? [[span![0], span![1] + DAY]]).map(([s, e], i) => bar(s, e, i))}
         {kind === 'aggregate' && bar(span![0], span![1] + DAY)}
         {kind === 'dated' && vis(date!) && <i className="tr-ring" style={{left: `${P(date!)}%`, borderColor: colour}} />}
         {kind === 'unknown' && <i className="tr-snap" />}
