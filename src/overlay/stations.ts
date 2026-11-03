@@ -5,8 +5,9 @@ import type {Period} from './TimeRuler';
 
 // The places behind a dong's count — subway stations, bus stops, bike docks — as circles sized by their
 // own value (mockups/point-layers: option A, "Show as" on the time card). Each file
-// (scripts/public-data-lib.mjs writeStations) holds every station, busiest first, with its 2024 totals,
-// and the day-by-day values of the busiest 1,100: those are sized; the rest show as faint specks.
+// (scripts/public-data-lib.mjs writeStations) holds every station, busiest first, with its totals over the
+// file's days (2024; the subway has a file a year, joined over the period's years), and the day-by-day
+// values of the busiest 1,100: those are sized; the rest show as faint specks.
 //   pts_daily  one row per sized station and day — on the time filter, Timeline sizes them by the day
 //   pts_sized  one row per sized station — Aggregate sizes them by the ruler's period combined
 //   pts        every station — the specks
@@ -22,17 +23,49 @@ export const pointIdOf = (key: string) => `p:${key}`;
 export const specksIdOf = (key: string) => `s:${key}`;
 export const POINT_DATA = ['pts_daily', 'pts_sized', 'pts'];
 
-type StationFile = {fields: string[]; stations: {sid: string; name: string; lng: number; lat: number; total: Record<string, number>}[];
-  daily: Record<string, number[][]>};
-const files = new Map<Kind, Promise<StationFile>>();
-export function loadStations(kind: Kind): Promise<StationFile> {
-  if (!files.has(kind)) {
-    files.set(kind, fetch(`/data/opendata/stations_${kind}.json`).then((r) => {
-      if (!r.ok) throw new Error(`stations_${kind}: HTTP ${r.status}`);
+// `year`: the 1 January its days run from (2024 when absent)
+type StationFile = {year?: number; fields: string[];
+  stations: {sid: string; name: string; lng: number; lat: number; total: Record<string, number>}[];
+  daily: Record<string, (number | null)[][]>};
+// the subway's stations come a file a year (scripts/build-subway.mjs): the years the period touches load
+const YEARS: Partial<Record<Kind, [number, number]>> = {subway: [2015, 2026]};
+const files = new Map<string, Promise<StationFile>>();
+const fetchFile = (path: string) => {
+  if (!files.has(path)) {
+    files.set(path, fetch(`/data/opendata/${path}.json`).then((r) => {
+      if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
       return r.json();
     }));
   }
-  return files.get(kind)!;
+  return files.get(path)!;
+};
+export function loadStations(kind: Kind, period: Period): Promise<StationFile> {
+  const range = YEARS[kind];
+  if (!range) return fetchFile(`stations_${kind}`);
+  const years: number[] = [];
+  for (let y = Math.max(range[0], new Date(period[0]).getUTCFullYear()); y <= Math.min(range[1], new Date(period[1] - 1).getUTCFullYear()); y++) years.push(y);
+  if (!years.length) years.push(Math.min(range[1], Math.max(range[0], new Date(period[0]).getUTCFullYear())));
+  return Promise.all(years.map((y) => fetchFile(`stations_${kind}/${y}`))).then(joinYears);
+}
+// Years one after another: every station of any of them (busiest over them all first), its days run on
+// from the first year's 1 January, empty in a year it was not open
+function joinYears(list: StationFile[]): StationFile {
+  if (list.length === 1) return list[0];
+  const fields = list[0].fields;
+  const lengths = list.map((f) => f.daily[fields[0]]?.[0]?.length ?? 0);
+  const bySid = new Map<string, {s: StationFile['stations'][number]; total: Record<string, number>; at: number[]}>();
+  list.forEach((f, k) => f.stations.forEach((s, i) => {
+    const e = bySid.get(s.sid) ?? bySid.set(s.sid, {s, total: Object.fromEntries(fields.map((x) => [x, 0])), at: list.map(() => -1)}).get(s.sid)!;
+    fields.forEach((x) => (e.total[x] += s.total[x] ?? 0));
+    if (i < (f.daily[fields[0]]?.length ?? 0)) e.at[k] = i;
+  }));
+  // those with days first, as in each file, so a station's row and its days share an index
+  const hasDays = (e: {at: number[]}) => e.at.some((i) => i >= 0);
+  const all = [...bySid.values()].sort((a, b) => Number(hasDays(b)) - Number(hasDays(a)) || b.total[fields[0]] - a.total[fields[0]]);
+  const daily = Object.fromEntries(fields.map((x) => [x, all.filter(hasDays).map((e) =>
+    list.flatMap((f, k) => (e.at[k] >= 0 ? f.daily[x][e.at[k]] : new Array(lengths[k]).fill(null))))]));
+  return {year: list[0].year, fields, daily,
+    stations: all.map((e) => ({...e.s, total: e.total}))};
 }
 
 // How many are sized: all that have days (the busiest 1,100), or the busiest share
@@ -41,13 +74,13 @@ export function sizedCount(file: StationFile, field: string, show: ShowAs, pct: 
   return show === 'all' ? withDays : Math.min(withDays, Math.max(1, Math.ceil((file.stations.length * pct) / 100)));
 }
 
-const DAY = 86400000, DAY0 = Date.UTC(2024, 0, 1);
-const dateOf = (i: number) => `${new Date(DAY0 + i * DAY).toISOString().slice(0, 10)} 00:00:00`;
+const DAY = 86400000;
+const dateOf = (day0: number, i: number) => `${new Date(day0 + i * DAY).toISOString().slice(0, 10)} 00:00:00`;
 const F = (name: string, type: string, analyzerType: string) => ({name, type, format: type === 'timestamp' ? 'YYYY-M-D H:m:s' : '', analyzerType});
 const BASE = [F('sid', 'string', 'STRING'), F('name', 'string', 'STRING'), F('lat', 'real', 'FLOAT'), F('lng', 'real', 'FLOAT')];
 
-function combined(vals: number[], from: number, to: number, combine: Combine, x: Variable) {
-  const vs = vals.slice(from, to + 1).filter(Number.isFinite);
+function combined(vals: (number | null)[], from: number, to: number, combine: Combine, x: Variable) {
+  const vs = vals.slice(from, to + 1).filter(Number.isFinite) as number[];
   if (!vs.length) return null;
   const c = combineFor(x, combine);
   if (c === 'sum') return vs.reduce((a, b) => a + b, 0);
@@ -62,18 +95,19 @@ export function stationTables(file: StationFile, x: Variable, show: ShowAs, pct:
   const {field} = POINTS[x.key];
   const n = sizedCount(file, field, show, pct);
   const daily = file.daily[field] || [];
-  const from = Math.max(0, Math.round((period[0] - DAY0) / DAY)), to = Math.min(365, Math.round((period[1] - DAY0) / DAY) - 1);
+  const day0 = Date.UTC(file.year ?? 2024, 0, 1), last = (daily[0]?.length ?? 0) - 1;
+  const from = Math.max(0, Math.round((period[0] - day0) / DAY)), to = Math.min(last, Math.round((period[1] - day0) / DAY) - 1);
   const dailyRows: any[][] = [];
   const sizedRows: any[][] = [];
-  const meanOf = (vals: number[], a: number, b: number) => {
-    const vs = vals.slice(a, b + 1).filter(Number.isFinite);
+  const meanOf = (vals: (number | null)[], a: number, b: number) => {
+    const vs = vals.slice(a, b + 1).filter(Number.isFinite) as number[];
     return vs.length ? vs.reduce((p, q) => p + q, 0) / vs.length : null;
   };
   for (let i = 0; i < n; i++) {
     const s = file.stations[i];
     // its usual day: the mean over the period (vs its avg in Timeline), and over the whole year (Aggregate)
     const usual = meanOf(daily[i], from, to), year = meanOf(daily[i], 0, daily[i].length - 1);
-    daily[i].forEach((v, d) => { if (d >= from && d <= to) dailyRows.push([s.sid, s.name, s.lat, s.lng, dateOf(d), v, usual]); });
+    daily[i].forEach((v, d) => { if (d >= from && d <= to && v != null) dailyRows.push([s.sid, s.name, s.lat, s.lng, dateOf(day0, d), v, usual]); });
     sizedRows.push([s.sid, s.name, s.lat, s.lng, combined(daily[i], from, to, combine, x), usual, year]);
   }
   const allRows = file.stations.map((s) => [s.sid, s.name, s.lat, s.lng, s.total[field]]);

@@ -8,8 +8,16 @@ import {THEMES, VAR_BY_KEY, isTemporal, topVarsOf, type Variable} from '../data/
 const DAY = 86400000;
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_SHOWN = 56;   // Days: about eight weeks around the pointer
+const MONTHS_DAYS = 457;   // Months: about fifteen months around it
 const REST = 'rgba(238, 242, 247, 0.5)';   // every variable not on the map, one grey
-type Zoom = 'years' | 'days';
+type Zoom = 'years' | 'months' | 'days';
+const ZOOMS: Zoom[] = ['years', 'months', 'days'];
+const shownOf = (z: Zoom) => (z === 'months' ? MONTHS_DAYS : DAYS_SHOWN) * DAY;
+const ZOOM_NAME: Record<Zoom, string> = {years: 'Years', months: 'Months', days: 'Days'};
+// the buttons show the initials; the full name is read out and in the tip
+const ZOOM_LABEL: Record<Zoom, string> = {years: 'Y', months: 'M', days: 'D'};
+const ZOOM_TIP: Record<Zoom, string> = {years: 'Every year with data', months: 'About fifteen months around the playing day',
+  days: 'The weeks around the playing day'};
 export type Period = [number, number];   // [first midnight, the midnight after the last day), UTC
 export type Band = {key: string; span: [number, number]; colour: string};
 
@@ -21,8 +29,8 @@ const snapMonth = (t: number) => { const a = monthStart(t), b = addMonths(a, 1);
 const snapDay = (t: number) => Math.round(t / DAY) * DAY;
 // Years shows every year the atlas has data for
 const ALL: Period = [Date.UTC(yearOf(DATA_SPAN[0]), 0, 1), Date.UTC(yearOf(DATA_SPAN[1]) + 1, 0, 1)];
-const clampView = (v0: number): Period => {
-  const len = DAYS_SHOWN * DAY;
+const clampView = (v0: number, len: number): Period => {
+  len = Math.min(len, ALL[1] - ALL[0]);
   const lo = Math.max(ALL[0], Math.min(ALL[1] - len, v0));
   return [lo, lo + len];
 };
@@ -57,9 +65,10 @@ const kindText = (x: Variable, kind: Kind) => {
 // thin lines under the axis the map's variables, each in its colour on the map. It has no box
 // of its own: closed, it is drawn on the map, and works without opening the drawer; open, it
 // rides in the sheet over the cards. Months show as ticks inside the period only while you are
-// at it (hovered, the drawer open, or dragging). Zoom: Years, or Days — the eight weeks around
-// the pointer (the wheel) or around the playing day (the button); dragging Days' axis pans.
-// The period is set in months on Years, in days on Days.
+// at it (hovered, the drawer open, or dragging). Zoom: Years; Months — about fifteen months; or
+// Days — about eight weeks; Months and Days around the pointer (the wheel, one step a notch) or
+// around the playing day (the button); dragging their axis pans. The period is set in months on
+// Years, in days on Months and Days.
 // Open, its ⌃ (left of the zoom) expands it: the axis rises with the sheet to the top, and the
 // lines under it unfold into a list down to the cards — every variable's days on the axis (see
 // Kind), the map's first, in their colours on the map, the rest in one grey. Lines with no data
@@ -80,12 +89,12 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
   const snap = zoom === 'years' ? snapMonth : snapDay;
 
   const zoomTo = (z: Zoom, at?: number, clientX?: number) => {
-    if (z === 'days') {
+    if (z !== 'years') {
       const anchor = at ?? day ?? period[0];
       // keep the anchor under the pointer (or centred, from the button)
       const frac = clientX != null && track.current
         ? (clientX - track.current.getBoundingClientRect().left) / track.current.getBoundingClientRect().width : 0.5;
-      setView(clampView(anchor - frac * DAYS_SHOWN * DAY));
+      setView(clampView(anchor - frac * shownOf(z), shownOf(z)));
     }
     setZoom(z);
   };
@@ -115,9 +124,9 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
           const k = Math.max(ALL[0] - p0[0], Math.min(ALL[1] - p0[1], n));
           onPeriod([p0[0] + k, p0[1] + k]);
         }
-      } else if (zoom === 'days') {
+      } else if (zoom !== 'years') {
         const r = track.current!.getBoundingClientRect();
-        setView(clampView(view0[0] - ((ev.clientX - x0) / r.width) * (view0[1] - view0[0])));
+        setView(clampView(view0[0] - ((ev.clientX - x0) / r.width) * (view0[1] - view0[0]), view0[1] - view0[0]));
       } else if (Math.abs(ev.clientX - x0) > 4) {
         const a = snap(Math.min(t0, t)), b = snap(Math.max(t0, t));
         onPeriod([Math.max(ALL[0], a), Math.min(ALL[1], Math.max(b, addMonths(a, 1)))]);
@@ -149,6 +158,23 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
       marks.push(<span key={`l${y}`} className={`tr-lb${lit ? ' in' : ''}`} style={{left: `${P(Date.UTC(y, 6, 1))}%`}}>{y}</span>);
     }
     marks.push(<i key="yend" className="tr-tk major" style={{left: `${P(v1)}%`}} />);
+  } else if (zoom === 'months') {
+    // a tick at each month, named — with its year on January and on the first month in view —
+    // and the weeks (1st, 8th, 15th, 22nd) inside the period
+    let first = true;
+    for (let t = monthStart(v0); t <= v1; t = addMonths(t, 1)) {
+      const d = new Date(t), lit = t >= period[0] && t < period[1];
+      if (t >= v0) {
+        marks.push(<i key={`m${t}`} className={`tr-tk major${inside(t) ? ' in' : ''}`} style={{left: `${P(t)}%`}} />);
+        marks.push(<span key={`l${t}`} className={`tr-lb left${lit ? ' in' : ''}`} style={{left: `${P(t)}%`}}>
+          {MON[d.getUTCMonth()]}{first || d.getUTCMonth() === 0 ? ` ${d.getUTCFullYear()}` : ''}</span>);
+        first = false;
+      }
+      for (const w of [8, 15, 22]) {
+        const s = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), w);
+        if (vis(s) && inside(s)) marks.push(<i key={`w${s}`} className="tr-tk minor in" style={{left: `${P(s)}%`}} />);
+      }
+    }
   } else {
     for (let t = Math.ceil(v0 / DAY) * DAY; t <= v1; t += DAY) {
       const d = new Date(t), date = d.getUTCDate();
@@ -208,7 +234,8 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
     return (
       <div key={x.key} className={`tr-line${mapped ? ' onmap' : ''}${coversPeriod(x.key, period) ? '' : ' off'}`}>
         <span className="tr-nm" style={{left: `${Math.max(0, start)}%`}}>{x.short}<small>{kindText(x, kind)}</small></span>
-        {kind === 'daily' && (runs[x.key] ?? [[span![0], span![1] + DAY]]).map(([s, e], i) => bar(s, e, i))}
+        {/* over many years, only the years in the period are on the tables: its whole span instead */}
+        {kind === 'daily' && ((x.years ? null : runs[x.key]) ?? [[span![0], span![1] + DAY]]).map(([s, e], i) => bar(s, e, i))}
         {kind === 'aggregate' && bar(span![0], span![1] + DAY)}
         {kind === 'dated' && vis(date!) && <i className="tr-ring" style={{left: `${P(date!)}%`, borderColor: colour}} />}
         {kind === 'unknown' && <i className="tr-snap" />}
@@ -220,18 +247,19 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
     e.stopPropagation();
     const el = e.currentTarget as HTMLElement, bar = (onThumb ? el.parentElement : el)!.getBoundingClientRect();
     const len = view[1] - view[0], whole = ALL[1] - ALL[0];
-    if (!onThumb) setView(clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2));
+    if (!onThumb) setView(clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2, len));
     el.setPointerCapture(e.pointerId);
     setDragging(true);
-    const x0 = e.clientX, start = onThumb ? view[0] : clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2)[0];
-    const move = (ev: PointerEvent) => setView(clampView(start + ((ev.clientX - x0) / bar.width) * whole));
+    const x0 = e.clientX, start = onThumb ? view[0] : clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2, len)[0];
+    const move = (ev: PointerEvent) => setView(clampView(start + ((ev.clientX - x0) / bar.width) * whole, len));
     const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); setDragging(false); };
     el.addEventListener('pointermove', move);
     el.addEventListener('pointerup', up);
   };
+  // the wheel: a step in (towards Days) or out (towards Years) a notch, around the pointer
   const wheel = (e: React.WheelEvent) => {
-    if (e.deltaY < 0 && zoom === 'years') zoomTo('days', timeAt(e.clientX), e.clientX);
-    else if (e.deltaY > 0 && zoom === 'days') zoomTo('years');
+    const z = ZOOMS[ZOOMS.indexOf(zoom) + (e.deltaY < 0 ? 1 : -1)];
+    if (e.deltaY !== 0 && z) zoomTo(z, timeAt(e.clientX), e.clientX);
   };
 
   return (
@@ -268,7 +296,7 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
           const s = Math.max(x.span[0], v0), e = Math.min(x.span[1] + DAY, v1);
           return e > s && <i key={x.key} className="tr-band" style={{top: 29 + i * 5, left: `${P(s)}%`, width: `${P(e) - P(s)}%`, background: x.colour}} />;
         })}
-        {zoom === 'days' && (
+        {zoom !== 'years' && (
           <div className="tr-sb" onPointerDown={(e) => scrub(e, false)}>
             <i style={{left: `${((view[0] - ALL[0]) / (ALL[1] - ALL[0])) * 100}%`, width: `${((view[1] - view[0]) / (ALL[1] - ALL[0])) * 100}%`}}
               onPointerDown={(e) => scrub(e, true)} />
@@ -283,9 +311,10 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
           </button>
         )}
         <div className="tr-zoom" role="group" aria-label="Ruler zoom">
-          <button className={zoom === 'years' ? 'on' : ''} aria-pressed={zoom === 'years'} onClick={() => zoomTo('years')}>Years</button>
-          <button className={zoom === 'days' ? 'on' : ''} aria-pressed={zoom === 'days'} onClick={() => zoomTo('days')}
-            title="The weeks around the playing day">Days</button>
+          {ZOOMS.map((z) => (
+            <button key={z} className={zoom === z ? 'on' : ''} aria-pressed={zoom === z} onClick={() => zoomTo(z)}
+              aria-label={ZOOM_NAME[z]} title={`${ZOOM_NAME[z]} — ${ZOOM_TIP[z].charAt(0).toLowerCase()}${ZOOM_TIP[z].slice(1)}`}>{ZOOM_LABEL[z]}</button>
+          ))}
         </div>
       </div>
     </div>

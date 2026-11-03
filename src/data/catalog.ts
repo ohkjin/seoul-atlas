@@ -32,6 +32,9 @@ export type Variable = {
   // a public daily dataset in the same per-place, per-day shape, loaded on demand the same way
   // (public/data/opendata, scripts/build-*.mjs)
   file?: string;
+  // a public daily dataset over many years: `file` holds `{year}`, one file a year, each from its
+  // 1 January; the years the time ruler's period touches load as it moves (industries.ts)
+  years?: [number, number];
   // a sum of other variables, worked out per neighbourhood when the data loads (uhus.ts)
   sumOf?: string[];
 };
@@ -107,8 +110,12 @@ export const VARIABLES: Variable[] = [
     ['bus_board', 'Bus boardings (daily)', 'Bus boardings at the stops in the dong (transit card)', 'OA-12912'],
     ['bus_alight', 'Bus alightings (daily)', 'Bus alightings at the stops in the dong (transit card)', 'OA-12912'],
     ['bike_rentals', 'Bike rentals (daily)', 'Public-bike (Ttareungyi) rentals started at the docks in the dong', 'OA-15246']]
-    .map(([key, short, full, id]) => ({...v(key, 'mobility', 'dong_daily', short, full, key === 'bike_rentals' ? 'rentals' : 'people',
-      `Seoul Open Data Plaza ${id}, 2024 daily`, 'sum'), file: `/data/opendata/${key}.json`})),
+    .map(([key, short, full, id]) => id === 'OA-12914'
+      // the subway's taps go back to 2015: a file a year
+      ? {...v(key, 'mobility', 'dong_daily', short, full, 'people', `Seoul Open Data Plaza ${id}, 2015–2026 daily`, 'sum'),
+        file: `/data/opendata/${key}/{year}.json`, years: [2015, 2026] as [number, number]}
+      : {...v(key, 'mobility', 'dong_daily', short, full, key === 'bike_rentals' ? 'rentals' : 'people',
+        `Seoul Open Data Plaza ${id}, 2024 daily`, 'sum'), file: `/data/opendata/${key}.json`}),
 
   {...v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true),
     long: 'RHSI (Retail Heat Sensitivity Index)'}

@@ -5,9 +5,10 @@ import {cancelFlight, flyToBounds, flyToView} from './flyTo';
 import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, colorRangeFor, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
-import {DATA_SPAN, spanOf} from '../data/sources';
+import {OPENING_YEAR, spanOf} from '../data/sources';
 import {loadDongDaily} from '../data/uhus';
-import {dailyBase, dailyExtras, isOnDemand, joinStatic, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
+import {addedRowCount, addedYearSpan, dailyBase, dailyExtras, isOnDemand, joinStatic, loadIndustries, setActiveYears, setDailyBase,
+  withIndustries} from '../data/industries';
 import {useCamera, useVisState} from './useKepler';
 import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
 import {adaptElevation, dataIdFor, drawSelection, layersOnMap, planFor, restylePair, setAggregateView, setCellView, setPointsShow, sync3d, syncOrder, toggleLink, withMain,
@@ -110,18 +111,28 @@ export default function Overlay({data}: {data: UhusData | null}) {
     for (const [id, level, label] of [['gu_daily', 'gu', 'Gu · daily'], ['dong_daily', 'dong', 'Dong · daily']] as const) {
       const base = dailyBase(level);
       if (!sets[id] || !base) continue;
-      if (dailyExtras().every((k) => sets[id].fields.some((f: any) => f.name === k))) continue;
+      if (dailyExtras().every((k) => sets[id].fields.some((f: any) => f.name === k))
+        && sets[id].dataContainer.numRows() === base.rows.length + addedRowCount(level) && addedYearsIn(sets[id], base.rows.length, level)) continue;
       const table = withIndustries(base, level);
       dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info: {id, label}, data: table} as any,
         options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
     }
+  };
+  // whether a table's added rows (after its own) are of the years asked: first and last
+  const addedYearsIn = (set: any, own: number, level: 'gu' | 'dong') => {
+    const span = addedYearSpan(level);
+    if (!span) return true;
+    const date = set.fields.findIndex((f: any) => f.name === 'date'), n = set.dataContainer.numRows();
+    const yearAt = (r: number) => Number(String(set.dataContainer.valueAt(r, date)).slice(0, 4));
+    return n > own && yearAt(own) === span[0] && yearAt(n - 1) === span[1];
   };
   useEffect(() => { if (data?.guDaily) setDailyBase('gu', data.guDaily as any); }, [data]);
   // A rebuild asked for while another was in flight finds the table swapped out and skips it,
   // so the one that lands may lack a column: whenever a daily table changes, put back any
   // loaded industry it lacks (a no-op when none is missing).
   const dailyFields = ['gu_daily', 'dong_daily'].map((id) => visState?.datasets?.[id]?.fields.length ?? 0).join();
-  useEffect(() => { refreshDailyTables(); }, [dailyFields]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const dailyRows = ['gu_daily', 'dong_daily'].map((id) => visState?.datasets?.[id]?.dataContainer?.numRows() ?? 0).join();
+  useEffect(() => { refreshDailyTables(); }, [dailyFields, dailyRows]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [linked, setLinked] = useState(true);
   // the atlas's own filters: a value range per selected variable (ourFilters.ts)
   const [ranges, setRanges] = useState<Ranges>({});
@@ -130,11 +141,21 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // daily playback (the time card steps day by day; see TimeCard)
   const [playing, setPlaying] = useState(false);
   // the period the time ruler picks (TimeRuler): playback runs inside it, the drawer dims what
-  // has no data in it. It opens on the latest year the atlas has data for.
-  const [period, setPeriod] = useState<Period>(() => {
-    const last = new Date(DATA_SPAN[1]).getUTCFullYear();
-    return [Date.UTC(last, 0, 1), Date.UTC(last + 1, 0, 1)];
-  });
+  // has no data in it. It opens on the year the most daily variables cover (OPENING_YEAR, 2024),
+  // though the ruler runs over every year the atlas has data for.
+  const [period, setPeriod] = useState<Period>(() => [Date.UTC(OPENING_YEAR, 0, 1), Date.UTC(OPENING_YEAR + 1, 0, 1)]);
+  // A variable over many years (the subway) has rows on the daily tables for the years the period
+  // touches beyond 2024: as the period moves, those years' files load and the tables are rebuilt
+  // with them (and without the years it left).
+  const multiYear = selection.filter((k) => VAR_BY_KEY[k]?.years).join();
+  useEffect(() => {
+    const years: number[] = [];
+    for (let y = new Date(period[0]).getUTCFullYear(); y <= new Date(period[1] - 1).getUTCFullYear(); y++) years.push(y);
+    const changed = setActiveYears(multiYear ? years : []);
+    const keys = multiYear ? multiYear.split(',') : [];
+    loadIndustries(keys).then(() => { if (changed || keys.length) refreshDailyTables(); })
+      .catch((e) => console.error('a year of daily data failed to load', e));
+  }, [period[0], period[1], multiYear]);   // eslint-disable-line react-hooks/exhaustive-deps
   const [dashboardOpen, setDashboardOpen] = useState(false);
   // the study the atlas is narrowed to (the drawer's "UHUS only"): what it does not use dims
   const [onlyProject, setOnlyProject] = useState<string | null>(null);
@@ -264,7 +285,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (!ptsKey || !hasLayers || sandbox) return;
     let live = true;
     const x = VAR_BY_KEY[ptsKey];
-    loadStations(pointsOf(ptsKey).kind).then((file) => {
+    loadStations(pointsOf(ptsKey).kind, period).then((file) => {
       if (!live) return;
       putStationTables(dispatch, store.getState().keplerGl.map.visState, stationTables(file, x, timeShow.show, timeShow.pct, period, timeShow.combine));
     }).catch((e) => console.error('stations failed to load', e));
@@ -324,12 +345,20 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const playDay = timeValue != null ? Math.ceil(timeValue / 86400000) : null;
   // the day on the map stays inside the period: moved to its first day when the period leaves it
   const timeDomain = timeIdx >= 0 ? visState.filters[timeIdx].domain as [number, number] | undefined : undefined;
+  // (a table rebuilt over a wider span of years can come back with the day emptied: put one back)
+  const timeWindow = timeIdx >= 0 ? visState.filters[timeIdx].value : null;
+  const windowOk = Array.isArray(timeWindow) && timeWindow.length === 2 && Number.isFinite(timeWindow[0]);
   useEffect(() => {
-    if (timeIdx < 0 || !timeDomain || timeValue == null) return;
+    if (timeIdx < 0 || !timeDomain) return;
     const lo = Math.max(period[0], timeDomain[0]), hi = Math.min(period[1] - 86400000, timeDomain[1]);
+    if (!windowOk) {
+      const at = lo <= hi ? lo : timeDomain[0];
+      dispatch(setFilter(timeIdx, 'value', [at, at + 86400000 - 1]) as any);
+      return;
+    }
     const day = Math.ceil(timeValue / 86400000) * 86400000;
     if (lo <= hi && (day < lo || day > hi)) dispatch(setFilter(timeIdx, 'value', [lo, lo + 86400000 - 1]) as any);
-  }, [period[0], period[1], timeIdx, timeDomain?.[0], timeDomain?.[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [period[0], period[1], timeIdx, timeDomain?.[0], timeDomain?.[1], windowOk]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the ruler's lines under its axis: the map's variables that have a span, each in its colour on
   // the map — the 3×3 grid's rose and teal for a pair on the flat map, else a hue of its own ramp
   const bands = useMemo(() => selection.flatMap((k, i) => {

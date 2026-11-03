@@ -1,14 +1,16 @@
 // Builds daily subway boardings / alightings per dong from Seoul Open Data Plaza files (public, KOGL type 1):
-//   ../raw-public/subway/CARD_SUBWAY_MONTH_2024MM.csv  OA-12914 서울시 지하철호선별 역별 승하차 인원 정보
+//   ../raw-public/subway/CARD_SUBWAY_MONTH_<YYYY>.csv (2015–2022, a year each) and _<YYYYMM>.csv (2023 on, a month each)
+//       OA-12914 서울시 지하철호선별 역별 승하차 인원 정보
 //       사용일자, 노선명, 역명, 승차총승객수, 하차총승객수 — one row per station × line × day (transit-card taps)
 //   ../raw-public/subway/station_master.csv            OA-21232 서울시 역사마스터 정보 (역사_ID, 역사명, 호선, 위도, 경도)
 // Writes (public-data-lib.mjs shape)
-//   public/data/opendata/subway_board.json, subway_alight.json   dong × 366 days
+//   public/data/opendata/subway_board/<year>.json, subway_alight/<year>.json   dong × the year's days, 2015–2026
 //   public/data/opendata/subway_stations.json   [{ name, lines, lon, lat, dong, board, alight }] 2024 totals per station
+//   public/data/opendata/stations_subway/<year>.json   the stations' points, a file a year (stations.ts)
 // A station counts in the dong its point falls in; stations outside Seoul are dropped.
 // Run from seoul-atlas-kepler/:  node scripts/build-subway.mjs
 import fs from 'node:fs';
-import {RAW, DAYS, dayOf, readText, splitCsv, dongAt, writeDaily, writeJson, writeStations} from './public-data-lib.mjs';
+import {RAW, OUT, dayOfYear, daysIn, readText, splitCsv, dongAt, writeDailyYears, writeJson, writeStations} from './public-data-lib.mjs';
 
 const DIR = `${RAW}/subway`;
 // stations renamed since 2024: the daily files' name → the station master's
@@ -41,51 +43,68 @@ function place(ln, nm) {
   return all.every((p) => km(p, all[0]) < 1) ? mean(all) : null;
 }
 
-const stations = new Map(); // name → { lines, lon, lat, dong, board[], alight[] }
-const unplaced = new Map();
-let outside = 0;
-for (const f of fs.readdirSync(DIR).filter((f) => /^CARD_SUBWAY_MONTH_2024\d\d\.csv$/.test(f)).sort()) {
+// every year: year → station (name@dong) → { name, lines, lon, lat, dong, board[], alight[] }, the year's days from 1 January
+const byYear = new Map();
+const unplaced = new Map();   // 2024 boardings at stations with no place
+let outside = 0;              // 2024 rows at stations outside Seoul
+// the last day each year has data for: the latest year stops there (2026 runs to September), not at 31 December
+const lastDay = new Map();
+// a row's place and dong, worked out once per line × station name (null: no place)
+const placeOf = new Map();
+for (const f of fs.readdirSync(DIR).filter((f) => /^CARD_SUBWAY_MONTH_\d{4}(\d\d)?\.csv$/.test(f)).sort()) {
   const rows = readText(`${DIR}/${f}`).trim().split(/\r?\n/).slice(1).map(splitCsv);
   for (const [date, ln, nm, on, off] of rows) {
-    const i = dayOf(date);
-    if (i < 0) continue;
-    const p = place(ln, nm);
-    if (!p) {
-      unplaced.set(`${ln} ${nm}`, (unplaced.get(`${ln} ${nm}`) ?? 0) + (+on || 0));
+    if (!/^\d{8}$/.test(date)) continue;
+    const k = `${ln}|${nm}`;
+    if (!placeOf.has(k)) { const p = place(ln, nm); placeOf.set(k, p ? {p, dong: dongAt(p.lon, p.lat)} : null); }
+    const at = placeOf.get(k);
+    const {year, i} = dayOfYear(date);
+    if (!at) {
+      if (year === 2024) unplaced.set(`${ln} ${nm}`, (unplaced.get(`${ln} ${nm}`) ?? 0) + (+on || 0));
       continue;
     }
-    const d = dongAt(p.lon, p.lat);
-    if (!d) {
-      outside++;
+    if (!at.dong) {
+      if (year === 2024) outside++;
       continue;
     }
-    const key = `${name(nm)}@${d}`;
-    const s = stations.get(key) ?? stations.set(key, {name: nm, lines: new Set(), lon: p.lon, lat: p.lat, dong: d,
-      board: new Array(DAYS).fill(0), alight: new Array(DAYS).fill(0)}).get(key);
+    lastDay.set(year, Math.max(lastDay.get(year) ?? 0, i));
+    const stations = byYear.get(year) ?? byYear.set(year, new Map()).get(year);
+    const key = `${name(nm)}@${at.dong}`;
+    const s = stations.get(key) ?? stations.set(key, {name: nm, lines: new Set(), lon: at.p.lon, lat: at.p.lat, dong: at.dong,
+      board: new Array(daysIn(year)).fill(0), alight: new Array(daysIn(year)).fill(0)}).get(key);
     s.lines.add(ln);
     s.board[i] += +on || 0;
     s.alight[i] += +off || 0;
   }
 }
-
-const board = new Map();
-const alight = new Map();
-for (const s of stations.values()) {
-  const b = board.get(s.dong) ?? board.set(s.dong, new Array(DAYS).fill(0)).get(s.dong);
-  const a = alight.get(s.dong) ?? alight.set(s.dong, new Array(DAYS).fill(0)).get(s.dong);
-  s.board.forEach((v, i) => (b[i] += v));
-  s.alight.forEach((v, i) => (a[i] += v));
+for (const [year, stations] of byYear) {
+  for (const s of stations.values()) { s.board = s.board.slice(0, lastDay.get(year) + 1); s.alight = s.alight.slice(0, lastDay.get(year) + 1); }
 }
 
+// a year's dongs: the sum of their stations
+const dongsOf = (stations, field) => {
+  const out = new Map();
+  for (const s of stations.values()) {
+    const arr = out.get(s.dong) ?? out.set(s.dong, new Array(s[field].length).fill(0)).get(s.dong);
+    s[field].forEach((v, i) => (arr[i] += v));
+  }
+  return out;
+};
 const total = (arr) => arr.reduce((s, v) => s + v, 0);
-console.log(`${stations.size} stations in Seoul, ${board.size} dongs with a station; ${outside} rows outside Seoul`);
+const stations = byYear.get(2024);
+console.log(`2024: ${stations.size} stations in Seoul, ${dongsOf(stations, 'board').size} dongs with a station; ${outside} rows outside Seoul`);
 if (unplaced.size) {
   console.log(`${unplaced.size} station rows with no place (2024 boardings):`);
   for (const [k, v] of [...unplaced].sort((a, b) => b[1] - a[1])) console.log(`  ${k}  ${v}`);
 }
-writeDaily('subway_board', board);
-writeDaily('subway_alight', alight);
+console.log(`years ${[...lastDay.keys()].sort().join(', ')}; the last runs to ${[...lastDay].sort()[lastDay.size - 1].join(' day ')}`);
+writeDailyYears('subway_board', new Map([...byYear].map(([y, st]) => [y, dongsOf(st, 'board')])));
+writeDailyYears('subway_alight', new Map([...byYear].map(([y, st]) => [y, dongsOf(st, 'alight')])));
 writeJson('subway_stations', [...stations.values()].map((s) => ({name: s.name, lines: [...s.lines],
   lon: +s.lon.toFixed(6), lat: +s.lat.toFixed(6), dong: s.dong, board: total(s.board), alight: total(s.alight)})));
-writeStations('subway', [...stations.values()].map((s, i) => ({id: i, name: s.name, lon: s.lon, lat: s.lat, dong: s.dong,
-  daily: {board: s.board, alight: s.alight}})), ['board', 'alight']);
+// the points, a file a year (stations.ts loads the years the period touches); a station keeps its sid across years
+fs.mkdirSync(`${OUT}/stations_subway`, {recursive: true});
+for (const [year, st] of [...byYear].sort(([a], [b]) => a - b)) {
+  writeStations(`subway/${year}`, [...st.values()].map((s) => ({id: name(s.name), name: s.name, lon: s.lon, lat: s.lat, dong: s.dong,
+    daily: {board: s.board, alight: s.alight}})), ['board', 'alight'], undefined, {year});
+}

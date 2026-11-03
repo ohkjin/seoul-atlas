@@ -129,11 +129,12 @@ export const SOURCES: DataSource[] = [
   },
   {
     projects: [],
-    id: 'subway', role: 'Inputs', title: 'Subway Ridership', file: 'CARD_SUBWAY_MONTH_2024MM.csv', kind: 'public',
-    description: 'Transit-card boardings and alightings at every subway station, day by day.',
+    id: 'subway', role: 'Inputs', title: 'Subway Ridership', file: 'CARD_SUBWAY_MONTH_<YYYY | YYYYMM>.csv', kind: 'public',
+    description: 'Transit-card boardings and alightings at every subway station, day by day, from 2015.',
     how: 'Each station is placed by the station master list and counted in the dong it stands in; a dong’s value is the ' +
-      'sum over its stations (229 dongs have one). Stations outside Seoul are left out.',
-    space: 'Station · 324 → Dong · 229', time: 'Day · 366 (2024)', span: ['2024-01-01', '2024-12-31'], source: 'Seoul Metropolitan Government',
+      'sum over its stations (229 dongs have one; fewer in the early years, before newer lines opened). Stations ' +
+      'outside Seoul are left out. The station points on the map are 2024’s.',
+    space: 'Station · 324 → Dong · 229', time: 'Day · Jan 2015 – Sep 2026', span: ['2015-01-01', '2026-09-30'], source: 'Seoul Metropolitan Government',
     vars: ['subway_board', 'subway_alight'],
     links: [{label: 'Seoul Open Data Plaza OA-12914', url: 'https://data.seoul.go.kr/dataList/OA-12914/S/1/datasetView.do'},
       {label: 'Station master OA-21232', url: 'https://data.seoul.go.kr/dataList/OA-21232/S/1/datasetView.do'}],
@@ -190,6 +191,9 @@ export const DATA_SPAN: [number, number] = (() => {
   const spans = SOURCES.flatMap((x) => (x.span ? [[Date.parse(x.span[0]), Date.parse(x.span[1])]] : []));
   return [Math.min(...spans.map((x) => x[0])), Math.max(...spans.map((x) => x[1]))];
 })();
+// the year the time ruler opens on: the one every daily variable covers (the subway alone runs
+// 2015–2026), so the map opens with all of them playing
+export const OPENING_YEAR = 2024;
 // whether a variable has data in a period [start, end) — a snapshot always does
 export const coversPeriod = (key: string, period: [number, number]) => {
   const s = spanOf(key);

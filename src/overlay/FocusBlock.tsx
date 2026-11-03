@@ -40,7 +40,7 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
 
   // A one-day playback window holds exactly one midnight — that is the date shown.
   const time = visState?.filters?.find((f: any) => f.id === 'time');
-  const day = time?.value ? Math.ceil(time.value[0] / DAY) * DAY : null;
+  const day = Number.isFinite(time?.value?.[0]) ? Math.ceil(time.value[0] / DAY) * DAY : null;
 
   // The atlas's own filter: a value range on each variable, opened from the card. How many
   // places pass both, at this grain (and, for a daily variable, on the playing day) — within

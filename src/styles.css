@@ -846,8 +846,8 @@ body.sandbox { --bar-h: 0px; }
 .drawer.expanded .time-ruler { bottom: calc(100% + 6px + var(--cov-h)); }
 .drawer.expanded .tr-band { opacity: 0; }
 .tr-track { position: absolute; left: 0; right: 132px; top: 0; bottom: 0; cursor: crosshair; touch-action: none; }
-.tr-track.days { cursor: grab; }
-.time-ruler.dragging .tr-track.days { cursor: grabbing; }
+.tr-track.days, .tr-track.months { cursor: grab; }
+.time-ruler.dragging .tr-track.days, .time-ruler.dragging .tr-track.months { cursor: grabbing; }
 .tr-base { position: absolute; left: 0; right: 0; top: 19px; height: 1px; background: rgba(255,255,255,0.14); pointer-events: none; }
 /* the period: the axis between its ends lit, and a band over it to drag it by */
 .tr-seg { position: absolute; top: 12px; height: 15px; cursor: grab; }

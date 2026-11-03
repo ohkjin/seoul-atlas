@@ -121,7 +121,7 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
   }, [playing, idx, speedNow]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onPlaying(false), []);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!f?.domain || !f?.value) return null;
+  if (!f?.domain || !Number.isFinite(f?.value?.[0])) return null;
   const day = Math.min(hi, Math.ceil(f.value[0] / DAY) * DAY);   // the one midnight in the window
   const progress = (day - lo) / Math.max(1, hi - lo);
   const speed = f.speed ?? 1;

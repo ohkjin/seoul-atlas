@@ -18,6 +18,14 @@ export function dayOf(s) {
   const i = Math.round((Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)) - START) / 864e5);
   return i >= 0 && i < DAYS ? i : -1;
 }
+// A dataset that runs over many years writes one file per year (writeDailyYears), each indexed from
+// its own 1 January: '20190305' → {year: 2019, i: 63}
+export const daysIn = (year) => Math.round((Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1)) / 864e5);
+export function dayOfYear(s) {
+  const d = s.replace(/-/g, '');
+  const year = +d.slice(0, 4);
+  return {year, i: Math.round((Date.UTC(year, +d.slice(4, 6) - 1, +d.slice(6, 8)) - Date.UTC(year, 0, 1)) / 864e5)};
+}
 
 // The portal mixes encodings, even within one dataset (CARD_SUBWAY_MONTH_202402.csv is CP949, the
 // other months UTF-8): try UTF-8 first, fall back to CP949.
@@ -164,20 +172,36 @@ export function dongAt(lon, lat) {
 
 // ── Output ───────────────────────────────────────────────────────────────────────────────────────
 // dongDaily: Map dong_code → number[366]. Writes { dong, gu } with district = sum of its dongs.
-export function writeDaily(name, dongDaily) {
+function dailyOf(dongDaily) {
   const dong = {};
   const gu = {};
   for (const [code, arr] of [...dongDaily].sort(([a], [b]) => a.localeCompare(b))) {
     dong[code] = arr.map((v) => Math.round(v));
-    const g = (gu[guOfDong.get(code)] ??= new Array(DAYS).fill(0));
+    const g = (gu[guOfDong.get(code)] ??= new Array(arr.length).fill(0));
     arr.forEach((v, i) => (g[i] += v));
   }
   for (const k of Object.keys(gu)) gu[k] = gu[k].map((v) => Math.round(v));
+  return {dong, gu};
+}
+function writeText(path, value, what) {
+  const text = JSON.stringify(value);
+  fs.writeFileSync(path, text);
+  console.log(`  ${path}  ${what}, ${(text.length / 1024).toFixed(0)} KB`);
+}
+export function writeDaily(name, dongDaily) {
+  const {dong, gu} = dailyOf(dongDaily);
   fs.mkdirSync(OUT, {recursive: true});
-  const text = JSON.stringify({dong, gu});
-  fs.writeFileSync(`${OUT}/${name}.json`, text);
-  console.log(`  ${OUT}/${name}.json  ${Object.keys(dong).length} dongs, ${Object.keys(gu).length} districts, ` +
-    `${(text.length / 1024).toFixed(0)} KB`);
+  writeText(`${OUT}/${name}.json`, {dong, gu}, `${Object.keys(dong).length} dongs, ${Object.keys(gu).length} districts`);
+}
+// byYear: Map year → (Map dong_code → number[the year's days, from 1 January]). Writes one file a year,
+//   public/data/opendata/<name>/<year>.json  { year, dong, gu }
+// (catalog `file: …/<name>/{year}.json`, `years`; the app loads the years the time ruler's period touches)
+export function writeDailyYears(name, byYear) {
+  fs.mkdirSync(`${OUT}/${name}`, {recursive: true});
+  for (const [year, dongDaily] of [...byYear].sort(([a], [b]) => a - b)) {
+    const {dong, gu} = dailyOf(dongDaily);
+    writeText(`${OUT}/${name}/${year}.json`, {year, dong, gu}, `${Object.keys(dong).length} dongs`);
+  }
 }
 
 // The points the app draws for a dataset (src/overlay/stations.ts): every station, busiest first, with
@@ -186,10 +210,11 @@ export function writeDaily(name, dongDaily) {
 // with the station's dong code, so a district's stations share its prefix.
 //   public/data/opendata/stations_<name>.json
 //   { fields, stations: [{ sid, name, lng, lat, total: {field: n} }], daily: { field: [[366] per busiest station] } }
-export function writeStations(name, stations, fields, cap = 1100) {
+export function writeStations(name, stations, fields, cap = 1100, extra = {}) {
   const total = (a) => a.reduce((s, v) => s + v, 0);
   const sorted = stations.filter((s) => s.dong).sort((a, b) => total(b.daily[fields[0]]) - total(a.daily[fields[0]]));
   writeJson(`stations_${name}`, {
+    ...extra,
     fields,
     stations: sorted.map((s) => ({sid: `${s.dong}:${s.id}`, name: s.name, lng: +s.lon.toFixed(5), lat: +s.lat.toFixed(5),
       total: Object.fromEntries(fields.map((f) => [f, total(s.daily[f])]))})),
