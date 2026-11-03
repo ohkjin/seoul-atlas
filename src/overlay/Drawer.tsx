@@ -21,7 +21,7 @@ type Props = {
   headline: Record<ThemeKey, string>;
   setHeadline: (theme: ThemeKey, key: string) => void;
   selection: string[];
-  onSelect: (key: string, as: 'main' | 'link') => void;
+  onSelect: (key: string, as: 'main' | 'link' | 'alone') => void;
   loading?: string[];   // industries whose sales are loading before they go on the map
   only: string | null;   // the study the atlas is narrowed to, if any
   onOnly: (project: string | null) => void;
@@ -159,7 +159,8 @@ export default function Drawer({focus, grain, headline, setHeadline, selection, 
     <div className={`drawer${open ? ' open' : ''}${open && expanded ? ' expanded' : ''}${linking ? ' linking' : ''}`} ref={root} onMouseOver={enter} onMouseLeave={leave}>
       <div className="drawer-sheet glass" aria-hidden />
       <TimeRuler period={period} onPeriod={onPeriod} day={day} bands={bands} onMap={selection}
-        open={open} expanded={expanded} onExpanded={(on) => { setExpanded(on); if (on) setPinned(true); }} />
+        open={open} expanded={expanded} onExpanded={(on) => { setExpanded(on); if (on) setPinned(true); }}
+        onPick={(key) => { onSelect(key, 'alone'); close(); }} canPick={(key) => inProject(key, only) && !loading?.includes(key)} />
       {open && (
         <div className="dkey" aria-hidden>
           {(['source', 'processed', 'research'] as const).map((t) => <span key={t}><i className={`dtier ${t}`} />{TIER_LABEL[t]}</span>)}

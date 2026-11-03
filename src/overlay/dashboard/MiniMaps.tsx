@@ -61,7 +61,7 @@ export default function MiniMaps({ctx}: {ctx: DashCtx}) {
             </button>
           );
         })}
-        <Profile vars={themeVars} series={series} place={focused.length === 1 ? places.find((p) => p.code === focused[0]) : undefined} grain={grain} />
+        <Profile vars={themeVars} series={series} members={places.filter(test)} name={focus.level === 'gu' ? focus.gu.name : null} grain={grain} />
       </div>
       <div className="mm-ramp">low {RAMP.map((c) => <i key={c} style={{background: c}} />)} high
         <span> · fifths of the {places.length} {grain === 'dong' ? 'neighborhoods' : 'districts'}, per map</span></div>
@@ -71,23 +71,34 @@ export default function MiniMaps({ctx}: {ctx: DashCtx}) {
 
 // The focused place on each of the theme's variables — the last row of the maps' grid, all
 // of its width: a dot along its peers from lowest to highest, the median in the middle, its value and
-// its share from the top or the bottom. Rows of HTML, so the type keeps its size in a narrow cell.
-function Profile({vars, series, place, grain}: {vars: Variable[]; series: Map<string, number>[]; place: Place | undefined; grain: Grain}) {
-  if (!place) return <div className="mm-profile hint">Focus a {grain === 'dong' ? 'neighborhood' : 'district'} to see its profile here.</div>;
+// its share from the top or the bottom. A district focused over neighborhoods: each of its
+// neighborhoods a small dot on the same scale, their median the white one, so a row shows
+// whether the district is high all through or by one or two of them. Rows of HTML, so the
+// type keeps its size in a narrow cell.
+function Profile({vars, series, members, name, grain}: {vars: Variable[]; series: Map<string, number>[]; members: Place[];
+  name: string | null; grain: Grain}) {
+  if (!members.length) return <div className="mm-profile hint">Focus a {grain === 'dong' ? 'neighborhood' : 'district'} to see its profile here.</div>;
+  const many = members.length > 1;
+  const median = (v: number[]) => { const s = [...v].sort((a, b) => a - b); return s[Math.floor((s.length - 1) / 2)]; };
   const rows = vars.map((v, i) => {
-    const vals = [...(series[i]?.values() ?? [])], at = series[i]?.get(place.code);
-    if (at == null || vals.length < 2) return null;
-    const p = vals.filter((u) => u < at).length / (vals.length - 1);
-    return {v, at, p};
+    const vals = [...(series[i]?.values() ?? [])];
+    const own = members.map((m) => ({m, at: series[i]?.get(m.code)})).filter((o): o is {m: Place; at: number} => o.at != null);
+    if (!own.length || vals.length < 2) return null;
+    const share = (x: number) => vals.filter((u) => u < x).length / (vals.length - 1);
+    const at = many ? median(own.map((o) => o.at)) : own[0].at;
+    return {v, at, p: share(at), peers: many ? own.map((o) => ({name: o.m.name, at: o.at, p: share(o.at)})) : []};
   }).filter((r): r is NonNullable<typeof r> => !!r);
   return (
     <div className="mm-profile">
-      <div className="mm-prof-title">{place.name} — profile</div>
+      <div className="mm-prof-title">{many ? `${name ?? 'These places'} — its ${members.length} ${grain === 'dong' ? 'neighborhoods' : 'districts'}, median white`
+        : `${members[0].name} — profile`}</div>
       <div className="mm-prof-row scale"><span /><span className="mm-prof-scale"><span>low</span><span>median</span><span>high</span></span><span /><span /></div>
-      {rows.map(({v, at, p}) => (
-        <div key={v.key} className="mm-prof-row" title={`${v.full}: ${profileValue(v, at)}`}>
+      {rows.map(({v, at, p, peers}) => (
+        <div key={v.key} className="mm-prof-row" title={`${v.full}: ${profileValue(v, at)}${peers.length ? ' (median)' : ''}`}>
           <span className="mm-prof-name">{v.short}</span>
-          <span className="mm-prof-track"><i className="mid" /><i className="dot" style={{left: `${p * 100}%`}} /></span>
+          <span className="mm-prof-track"><i className="mid" />
+            {peers.map((q) => <i key={q.name} className="peer" style={{left: `${q.p * 100}%`}} title={`${q.name}: ${profileValue(v, q.at)}`} />)}
+            <i className="dot" style={{left: `${p * 100}%`}} /></span>
           <span className="mm-prof-val">{profileValue(v, at)}</span>
           <span className="mm-prof-share">{p >= 0.5 ? `top ${Math.max(1, Math.round((1 - p) * 100))}%` : `bottom ${Math.max(1, Math.round(p * 100))}%`}</span>
         </div>

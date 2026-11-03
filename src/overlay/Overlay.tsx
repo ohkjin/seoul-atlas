@@ -88,8 +88,10 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // the newer one's spinner. A main and a link picked together both land.
   const latestPick = useRef({main: 0, link: 0});
   // as the main (the drawer's map button, a search hit) or linked to it (🔗)
-  const select = (key: string, as: 'main' | 'link' = 'link') => {
-    const next = as === 'main' ? withMain : toggleLink;
+  // 'alone': that variable on the map by itself, the link dropped (the time ruler's expand)
+  const select = (key: string, how: 'main' | 'link' | 'alone' = 'link') => {
+    const next = how === 'alone' ? (_: string[], k: string) => [k] : how === 'main' ? withMain : toggleLink;
+    const as = how === 'link' ? 'link' : 'main';
     const pick = ++latestPick.current[as];
     const current = () => pick === latestPick.current[as];
     if (isOnDemand(key) && !onTables(key)) {

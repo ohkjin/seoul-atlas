@@ -905,6 +905,12 @@ body.sandbox { --bar-h: 0px; }
   font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
 .tr-cov > .tr-line:first-of-type { margin-top: 2px; }
 .tr-line { position: relative; height: 26px; transition: opacity 0.15s; }
+/* a line puts its variable on the map: a faint row behind it while hovered */
+.tr-line.pick { cursor: pointer; }
+.tr-line.pick::before { content: ''; position: absolute; left: -6px; right: -6px; top: -1px; bottom: 1px; border-radius: 8px; transition: background-color 0.12s; }
+.tr-line.pick:hover::before, .tr-line.pick:focus-visible::before { background: rgba(255,255,255,0.05); }
+.tr-line.pick:hover .tr-nm { color: var(--ink); }
+.tr-line.pick:focus-visible { outline: none; }
 .tr-line.off { opacity: 0.32; }
 .tr-nm { position: absolute; top: 1px; font-size: 11px; color: var(--ink-2); white-space: nowrap; }
 .tr-nm small { margin-left: 6px; font-size: 10px; color: var(--ink-3); }

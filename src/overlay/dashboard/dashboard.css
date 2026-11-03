@@ -17,3 +17,10 @@
 .dash-panel.wide { overflow: visible; min-height: max-content; }
 .dash-grid.expanded { grid-auto-rows: auto; }
 .dash-grid.expanded .dash-panel.expanded { box-sizing: border-box; height: calc(var(--grid-h, 640px) - 4px); min-height: 0; overflow: auto; }
+
+/* the profile under the theme's maps, a district focused over neighborhoods (MiniMaps.tsx):
+   each of its neighborhoods a small dot under the median's white one */
+.mm-prof-track .peer { position: absolute; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%;
+  background: rgba(238, 242, 247, 0.4); }
+.mm-prof-track .peer:hover { background: var(--ink); z-index: 2; }
+.mm-prof-track .dot { z-index: 1; pointer-events: none; }

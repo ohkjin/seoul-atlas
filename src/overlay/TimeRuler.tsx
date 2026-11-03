@@ -38,7 +38,9 @@ const clampView = (v0: number, len: number): Period => {
 type Props = {period: Period; onPeriod: (p: Period) => void; day: number | null; bands: Band[];
   onMap: string[];   // the map's variables, first in the expand
   open: boolean;     // the drawer is open: the expand can open
-  expanded: boolean; onExpanded: (on: boolean) => void};
+  expanded: boolean; onExpanded: (on: boolean) => void;
+  onPick: (key: string) => void;   // a line in the expand clicked: that variable alone on the map, the drawer shut
+  canPick: (key: string) => boolean};
 
 // What a variable is, as time: a value every day (filled, broken where days are missing), one
 // value over a period (hollow bar), one value as of a date (hollow ring), or a date the data does
@@ -74,7 +76,7 @@ const kindText = (x: Variable, kind: Kind) => {
 // Kind), the map's first, in their colours on the map, the rest in one grey. Lines with no data
 // in the period dim. The list scrolls under the axis. On Days a scrollbar under the axis shows
 // where the weeks on screen sit.
-export default function TimeRuler({period, onPeriod, day, bands, onMap, open, expanded, onExpanded}: Props) {
+export default function TimeRuler({period, onPeriod, day, bands, onMap, open, expanded, onExpanded, onPick, canPick}: Props) {
   const [zoom, setZoom] = useState<Zoom>('years');
   const [view, setView] = useState<Period>(ALL);
   const [dragging, setDragging] = useState(false);
@@ -224,6 +226,7 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
   const colourOf: Record<string, string> = Object.fromEntries(bands.map((x) => [x.key, x.colour]));
   const lineOf = (x: Variable, mapped = false) => {
     const kind = kindOf(x), colour = colourOf[x.key] ?? REST;
+    const pickable = !(onMap.length === 1 && x.key === onMap[0]) && canPick(x.key);   // not when it is already alone on the map
     const span = spanOf(x.key), date = asOfOf(x.key);
     const bar = (s0: number, e0: number, key: string | number = 0) => {
       const s = Math.max(s0, v0), e = Math.min(e0, v1);
@@ -232,7 +235,11 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
     };
     const start = kind === 'dated' ? P(date!) : span ? P(Math.max(span[0], v0)) : 0;
     return (
-      <div key={x.key} className={`tr-line${mapped ? ' onmap' : ''}${coversPeriod(x.key, period) ? '' : ' off'}`}>
+      <div key={x.key} className={`tr-line${mapped ? ' onmap' : ''}${coversPeriod(x.key, period) ? '' : ' off'}${pickable ? ' pick' : ''}`}
+        role={pickable ? 'button' : undefined} tabIndex={pickable ? 0 : undefined}
+        title={pickable ? 'Show it alone on the map' : onMap[0] === x.key ? 'On the map' : undefined}
+        onClick={pickable ? () => onPick(x.key) : undefined}
+        onKeyDown={pickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(x.key); } } : undefined}>
         <span className="tr-nm" style={{left: `${Math.max(0, start)}%`}}>{x.short}<small>{kindText(x, kind)}</small></span>
         {/* over many years, only the years in the period are on the tables: its whole span instead */}
         {kind === 'daily' && ((x.years ? null : runs[x.key]) ?? [[span![0], span![1] + DAY]]).map(([s, e], i) => bar(s, e, i))}
