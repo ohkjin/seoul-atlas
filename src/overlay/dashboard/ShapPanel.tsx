@@ -2,6 +2,7 @@ import {useMemo, useState} from 'react';
 import {ChevronDown, ChevronRight} from 'lucide-react';
 import {SHAP_GROUPS, VAR_BY_KEY} from '../../data/catalog';
 import {niceTicks} from '../scatter';
+import {useColumnWidth} from './SalesPanel';
 import type {DashCtx} from './Dashboard';
 
 // What drives RHSI, from the UHUS model's SHAP contributions — in two parts.
@@ -10,8 +11,8 @@ import type {DashCtx} from './Dashboard';
 // for it; the small groups fold into one bar. Log-ratio contributions add up, so the bars are
 // exact. Then the beeswarm (below): each row every neighbourhood (422 dots) placed by its
 // contribution — left lowers RHSI (sales fall in heat) — and coloured by the input's own
-// value. Clicking a dot focuses that neighbourhood.
-const W = 940;
+// value. Clicking a dot focuses that neighbourhood. Both are drawn at the panel's own width,
+// measured, so a wide panel stretches them sideways and the type keeps its size.
 const FOLD = 0.01;                    // groups pushing less than this fold into "Other" in the waterfall
 
 export type Table = {codes: string[]; names: string[]; gus: string[]; col: (key: string) => number[]};
@@ -32,6 +33,7 @@ const asPct = (x: number) => `≈ ${(Math.exp(x) - 1) * 100 >= 0 ? '+' : '−'}$
 
 export default function ShapPanel({ctx}: {ctx: DashCtx}) {
   const {datasets, focus, onPick} = ctx;
+  const [W, measure] = useColumnWidth();
   const datasetKeys = Object.keys(datasets || {}).join();
   const table = useMemo(() => readDongs(datasets), [datasetKeys]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the focused place's rows: its own, a district's dongs, none for Seoul
@@ -43,18 +45,18 @@ export default function ShapPanel({ctx}: {ctx: DashCtx}) {
   if (!table) return <p className="dash-empty">Loading the neighborhoods…</p>;
   const place = focus.level === 'seoul' ? null : focus.level === 'gu' ? focus.gu.name : focus.dong.name;
   return (
-    <div className="shap">
+    <div className="shap" ref={measure}>
       {members?.length && place
-        ? <Waterfall table={table} members={members} place={place} isGu={focus.level === 'gu'} />
+        ? <Waterfall W={W} table={table} members={members} place={place} isGu={focus.level === 'gu'} />
         : <p className="shap-sum">Focus a neighborhood or a district to see why its RHSI is what it is.</p>}
       <h3 className="shap-sub">All neighborhoods — what each input does to RHSI, by group</h3>
-      <Beeswarm table={table} members={members} onPick={(code) => onPick('dong', code)} />
+      <Beeswarm W={W} table={table} members={members} onPick={(code) => onPick('dong', code)} />
     </div>
   );
 }
 
 // Seoul's average, each group's push for this place, and where that leaves it.
-function Waterfall({table, members, place, isGu}: {table: Table; members: number[]; place: string; isGu: boolean}) {
+function Waterfall({W, table, members, place, isGu}: {W: number; table: Table; members: number[]; place: string; isGu: boolean}) {
   const at = (vals: number[]) => mean(members.map((i) => vals[i]));
   const base = mean(table.col('RHSI_retail'));
   const groups = SHAP_GROUPS.map((g) => {
@@ -134,7 +136,6 @@ const rankColours = (vals: number[]) => {
 // the focused place, else across Seoul); groups fold, the two strongest start open. The
 // focused place is ringed, its value at the right.
 const LABEL = 200, VALW = 60, KEY = 56, HEAD = 40, ROW = 36, R = 2.1, GAP = R * 2 + 0.3;
-const PLOT_R = W - VALW - KEY;
 
 function swarm(px: number[], half: number): number[] {
   const order = px.map((_, i) => i).filter((i) => Number.isFinite(px[i])).sort((a, b) => px[a] - px[b]);
@@ -153,8 +154,9 @@ function swarm(px: number[], half: number): number[] {
   return dy;
 }
 
-function Beeswarm({table, members, onPick}: {table: Table; members: number[] | null; onPick: (code: string) => void}) {
-  // every row's dots and colours, built once per data load
+function Beeswarm({W, table, members, onPick}: {W: number; table: Table; members: number[] | null; onPick: (code: string) => void}) {
+  const PLOT_R = W - VALW - KEY;
+  // every row's dots and colours, built once per data load and width
   const rows = useMemo(() => {
     const groups = SHAP_GROUPS.map((g) => ({...g, sum: table.col(g.key),
       kids: g.inputs.map((k) => ({key: k, label: VAR_BY_KEY[k]?.short ?? k, shap: table.col(`shap_${k}`), value: table.col(k)}))}));
@@ -170,7 +172,7 @@ function Beeswarm({table, members, onPick}: {table: Table; members: number[] | n
     };
     return {lo, hi, X, groups: groups.map((g) => ({...g, dots: dotsOf(g.sum, HEAD, null, `${g.label} (sum)`),
       kids: g.kids.map((k) => ({...k, dots: dotsOf(k.shap, ROW, rankColours(k.value), k.label)}))}))};
-  }, [table]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [table, W]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const valueOf = (vals: number[]) => (members?.length ? mean(members.map((i) => vals[i])) : NaN);
   const meanAbs = (vals: number[]) => mean(vals.map(Math.abs));

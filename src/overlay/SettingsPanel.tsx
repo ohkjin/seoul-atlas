@@ -5,7 +5,7 @@ import {EXPORT_DATA_ID, EXPORT_IMAGE_ID, EXPORT_MAP_ID, NO_MAP_ID} from '@kepler
 import {Download, FileCode2, Image, SlidersHorizontal} from 'lucide-react';
 import {useMapStyle, useVisState} from './useKepler';
 import {openMapSettings} from './layers';
-import {uiZoom} from './uiScale';
+import {TEXT_SIZES, setTextSize, textSize, uiZoom} from './uiScale';
 import type {Annotations} from './MapAnnotations';
 import {FX_DEFAULT, type Fx, type Look3d} from './effects';
 import lookGlow from '../assets/look-glow.jpg';
@@ -76,7 +76,8 @@ export function rememberedAnnotations(): Annotations {
 
 // Settings: a glass panel beside the rail's Settings tab, in two tabs, in the app's own
 // style, for what kepler can do but the app keeps out of sight — the basemap and its
-// layers, the gu and dong names and boundaries drawn over the map, the map's hover
+// layers, the gu and dong names and boundaries drawn over the map, the size of the
+// panels' text, the map's hover
 // interactions, and exporting the map or its data (kepler's own export dialogs).
 // The detailed per-layer settings stay behind the ⚙ on the first map card; the button
 // at the bottom opens them too. Basemap and switches are remembered in this browser.
@@ -90,19 +91,29 @@ export default function SettingsPanel({onClose, annotations, onAnnotations, fx, 
   const root = useRef<HTMLDivElement>(null);
   const [tab, setTabState] = useState<Tab>(lastTab);
   const setTab = (t: Tab) => { lastTab = t; setTabState(t); };
+  const [size, setSize] = useState(textSize);
+  const pickSize = (id: string) => { setSize(id); setTextSize(id); };
   const styleType = mapStyle?.styleType;
   const available = mapStyle?.mapStyles || {};
   const interaction = visState?.interactionConfig || {};
   const visibleGroups = mapStyle?.visibleLayerGroups || {};
   const groupsHere = new Set((available[styleType]?.layerGroups || []).map((g: any) => g.slug));
   // opens beside the Settings tab in the rail, its top level with the tab's, and runs down
-  // no further than the status bar (scrolling inside if the screen is short)
+  // no further than the status bar (scrolling inside if the screen is short); again when the
+  // window or the text size changes
   const [at, setAt] = useState<{left: number; top: number; maxHeight: number} | null>(null);
   useLayoutEffect(() => {
-    const r = document.querySelector('[data-settings-tab]')?.getBoundingClientRect();
-    const z = uiZoom();   // screen pixels → the zoomed overlay's pixels
-    const floor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-h')) + 16;
-    if (r) setAt({left: r.right / z + 14, top: r.top / z, maxHeight: window.innerHeight / z - r.top / z - floor});
+    const place = () => {
+      const r = document.querySelector('[data-settings-tab]')?.getBoundingClientRect();
+      const z = uiZoom();   // screen pixels → the zoomed overlay's pixels
+      const floor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bar-h')) + 16;
+      if (r) setAt({left: r.right / z + 14, top: r.top / z, maxHeight: window.innerHeight / z - r.top / z - floor});
+    };
+    place();
+    // after the zoom is applied (uiScale's own resize listener runs first)
+    const later = () => requestAnimationFrame(place);
+    window.addEventListener('resize', later);
+    return () => window.removeEventListener('resize', later);
   }, []);
 
   useEffect(() => {
@@ -156,6 +167,15 @@ export default function SettingsPanel({onClose, annotations, onAnnotations, fx, 
         ))}
       </nav>
       {tab === 'display' && <>
+      <section>
+        <h3>Text size</h3>
+        {/* the whole overlay at once (uiScale.ts): every panel, its type and its gaps */}
+        <div className="set-chips" role="radiogroup" aria-label="Text size">
+          {TEXT_SIZES.map(([id, label]) => (
+            <button key={id} role="radio" aria-checked={size === id} className={size === id ? 'on' : ''} onClick={() => pickSize(id)}>{label}</button>
+          ))}
+        </div>
+      </section>
       <section>
         <h3>Base map</h3>
         <div className="set-maps" role="radiogroup" aria-label="Base map">

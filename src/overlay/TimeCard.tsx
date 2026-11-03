@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState} from 'react';
+import {useEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch, useStore} from 'react-redux';
 import {setFilter, updateFilterAnimationSpeed} from '@kepler.gl/actions';
 import type {Focus} from './Overlay';
@@ -9,6 +9,11 @@ import {fmt, numericColumn, rowFilter} from './focusValues';
 import {filtersKey} from './ourFilters';
 import {BIVARIATE} from './pair';
 import {Maximize2} from 'lucide-react';
+import type {Period} from './TimeRuler';
+import {COMBINE_LABEL, aggregateFor, canSum, combineFor, type Combine, type TimeView} from './timeModes';
+import {aggIdOf} from '../data/catalog';
+import {pointIdOf, pointsOf, sizeLegendOf} from './stations';
+import type {ShowAs} from './timeModes';
 
 const DAY = 86400000;
 const SPEEDS = [0.5, 1, 2];
@@ -20,7 +25,7 @@ const PAIR_COLOURS = [BIVARIATE[2][0], BIVARIATE[0][2]];
 type Colour = {paint: string; ramp?: string[]};
 
 // The time control: a full card at the foot of the right column, in the spirit of kepler's
-// enlarged playback widget — a date, a year-long chart of each daily variable selected (one,
+// enlarged playback widget — a date, a chart over the time ruler's period of each daily variable selected (one,
 // or two stacked) for the focused place, a playhead, and play / speed. With a value filter on (the atlas's or kepler's), the
 // year is drawn twice, as kepler's own time chart does (every filter but time's): the place
 // whole, grey, and its rows that pass the filters, in the accent — Actual on one scale (how
@@ -30,10 +35,20 @@ type Colour = {paint: string; ramp?: string[]};
 // daily data joined, ~13 ms a frame, which held playback near 30fps. The data is daily, so
 // nothing new shows between midnights anyway: stepping by day costs that 10–20 times a
 // second instead of 60, and the map keeps its frame rate in between.
+// Two folder tabs stand on the card (mockups/time-modes/card.png): Timeline plays the period day by
+// day, as above; Aggregate combines it into one value per place and the chart's space holds the
+// choices instead. Under the chart, Value: Actual, or vs Avg — on the same day or over all days
+// (timeModes.ts). A linked pair keeps its own day-by-day grid, so it has neither Aggregate nor Value.
 type Props = {focus: Focus; selection: string[]; linked: boolean; is3d: boolean; grain: Grain; playing: boolean;
+  period: Period;   // the time ruler's period: the chart spans it, playback loops inside it
   onPlaying: (on: boolean) => void;
-  onExpand: () => void};
-export default function TimeCard({focus, selection, linked, is3d, grain, playing, onPlaying, onExpand}: Props) {
+  onExpand: () => void;
+  view: TimeView; onView: (v: TimeView) => void; aggregateOn: boolean; paired: boolean;
+  scopeName: string};   // whose average vs Avg is against: Seoul, or the focused district
+const COMBINES: Combine[] = ['sum', 'mean', 'median', 'max', 'hotmild'];
+const fmtDay = (t: number) => new Date(t).toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'});
+export default function TimeCard({focus, selection, linked, is3d, grain, playing, period, onPlaying, onExpand,
+  view, onView, aggregateOn, paired, scopeName}: Props) {
   const dispatch = useDispatch();
   const store = useStore<any>();
   const visState = useVisState();
@@ -47,10 +62,14 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
   const filtersAt = filtersKey(filters);
   const focusKey = focus.level === 'seoul' ? 'seoul' : focus.level === 'gu' ? focus.gu.code : focus.dong.code;
   const [scaled, setScaled] = useState(false);
+  // the days shown and played: the ruler's period, where the daily data has them
+  const [lo, hi] = f?.domain ? [Math.max(period[0], f.domain[0]), Math.min(period[1] - DAY, f.domain[1])] : [0, -1];
+  const span = useRef<[number, number]>([lo, hi]);
+  span.current = [lo, hi];
 
   const all = useMemo(() => variables.map((variable) => {
     const dataset = datasetOf(variable);
-    if (!dataset || !f?.domain) return null;
+    if (!dataset || !f?.domain || lo > hi) return null;
     // A neighbourhood is read from its own rows where the data has them, else from its
     // district's; Seoul and districts add up (sales) or average (temperature) their rows.
     const dongRows = dataset.fields.some((x: any) => x.name === 'dong_code');
@@ -62,7 +81,6 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
     const placeIdx = dataset.fields.findIndex((x: any) => x.name === (byDong ? 'dong_code' : 'gu_code'));
     if (!dateField || !valueField) return null;
     const t = numericColumn(dataset, dateField), v = numericColumn(dataset, valueField);
-    const [lo, hi] = f.domain as [number, number];
     const n = Math.round((hi - lo) / DAY) + 1;
     const sum = new Float64Array(n), cnt = new Uint32Array(n);
     const pass = rowFilter(dataset, areas, dongRows ? 'dong_code' : 'gu_code', filters);
@@ -83,7 +101,7 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
     return {variable, vals, min: Math.min(...finite), max: Math.max(...finite), total, kept, places: cnt, passing: kcnt};
   }).filter((s): s is NonNullable<typeof s> => !!s),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [variables.map((x) => x.key).join(), focusKey, grain, f?.domain, visState?.datasets?.dong_daily, visState?.datasets?.gu_daily,
+  [variables.map((x) => x.key).join(), focusKey, grain, lo, hi, visState?.datasets?.dong_daily, visState?.datasets?.gu_daily,
     visState?.datasets?.dong, visState?.datasets?.gu, filtersAt]);
   const series = all[0] ?? null;
 
@@ -92,8 +110,9 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
     if (!playing || idx < 0) return;
     const t = window.setInterval(() => {
       const cur = store.getState().keplerGl.map.visState.filters[idx];
-      if (!cur?.domain || !cur?.value) return;
-      const [lo, hi] = cur.domain as [number, number];
+      if (!cur?.value) return;
+      const [lo, hi] = span.current;
+      if (lo > hi) return;
       const day = Math.min(hi, Math.ceil(cur.value[0] / DAY) * DAY);
       const next = day + DAY > hi ? lo : day + DAY;   // loop back to the first day
       dispatch(setFilter(idx, 'value', [next, next + DAY - 1]) as any);
@@ -103,7 +122,6 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
   useEffect(() => () => onPlaying(false), []);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!f?.domain || !f?.value) return null;
-  const [lo, hi] = f.domain as [number, number];
   const day = Math.min(hi, Math.ceil(f.value[0] / DAY) * DAY);   // the one midnight in the window
   const progress = (day - lo) / Math.max(1, hi - lo);
   const speed = f.speed ?? 1;
@@ -205,8 +223,124 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
     </button>
   );
 
+  const set = (v: Partial<TimeView>) => onView({...view, ...v});
+  const tabs = (
+    <div className="tc-tabs" role="tablist" aria-label="How the days are shown">
+      <button role="tab" className={`tc-tab${aggregateOn ? ' on' : ''}`} aria-selected={aggregateOn}
+        title="Combine the ruler’s period into one value per place"
+        onClick={() => set({mode: 'aggregate'})}>Σ Aggregate</button>
+      <button role="tab" className={`tc-tab${aggregateOn ? '' : ' on'}`} aria-selected={!aggregateOn}
+        title="Play the period day by day" onClick={() => set({mode: 'timeline'})}>◷ Timeline</button>
+    </div>
+  );
+  // Value: Actual, or vs Avg — one bubble with its base inside, each part lit when chosen (Aggregate
+  // has one value per place, so no base)
+  // (stations, stops and docks: each against its own usual day — against each other, the colour only
+  // repeated the circle's size; see timeModes.ts)
+  const ownAvg = !!(series && pointsOf(series.variable.key)) && view.show !== 'dong';
+  const valueRow = (withBase: boolean) => ownAvg ? (
+    <div className="tc-row">
+      <span className="tc-lab">Value</span>
+      <button className={`tc-pill${view.value === 'actual' ? ' on' : ''}`} onClick={() => set({value: 'actual'})}
+        title="The number itself: the circle that day's value, in one teal">Actual</button>
+      <span className="tc-combo">
+        <button className={view.value === 'avg' ? 'lit' : ''} onClick={() => set({value: 'avg'})}
+          title={aggregateOn ? 'The period against its own year: the circle the period, the colour how far from its usual'
+            : 'Each one against its own usual day: the circle its usual day, the colour that day ÷ usual'}>vs its avg</button>
+      </span>
+    </div>
+  ) : (
+    <div className="tc-row">
+      <span className="tc-lab">Value</span>
+      <button className={`tc-pill${view.value === 'actual' ? ' on' : ''}`} onClick={() => set({value: 'actual'})}
+        title="The number itself, on one scale for the whole period">Actual</button>
+      <span className="tc-combo">
+        <button className={view.value === 'avg' ? 'lit' : ''} onClick={() => set({value: 'avg'})}
+          title={withBase ? `Above or below ${scopeName}'s average — ${view.base === 'same' ? 'on the same day' : 'over all days of the period'}`
+            : `Above or below ${scopeName}'s average`}>vs Avg</button>
+        {withBase && <>
+          <button className={view.value === 'avg' && view.base === 'same' ? 'lit' : ''} onClick={() => set({value: 'avg', base: 'same'})}
+            title={`Against the average of ${scopeName}'s places on the same day: where it is higher or lower today`}>same day</button>
+          <button className={view.value === 'avg' && view.base === 'all' ? 'lit' : ''} onClick={() => set({value: 'avg', base: 'all'})}
+            title="Against the average over all days of the period: seasons and holidays show">all days</button>
+        </>}
+      </span>
+    </div>
+  );
+
+  // Show as (data with points): circles for the stations, the busiest of them, or the dong totals;
+  // Size: what a circle's area stands for, from the layer's size domain (fixed over the period)
+  const pts = series ? pointsOf(series.variable.key) : undefined;
+  const SHOW: [ShowAs, string, string][] = [['all', 'All, sized', 'Every one a circle, its area the value'],
+    ['top', 'Busiest', 'The busiest sized, the rest as faint specks'], ['only', 'Busiest only', 'Only the busiest'],
+    ['dong', 'By dong', 'Summed per dong, like the other variables']];
+  const showRow = pts && !paired && (
+    <div className="tc-row">
+      <span className="tc-lab">Show</span>
+      {SHOW.map(([k, label, title]) => (
+        <button key={k} className={`tc-pill${view.show === k ? ' on' : ''}`} onClick={() => set({show: k})} title={title}>{label}</button>
+      ))}
+      {(view.show === 'top' || view.show === 'only') && (
+        <span className="tc-combo" title={`The busiest share of the ${pts.what}`}>
+          {[1, 5, 10].map((p) => <button key={p} className={view.pct === p ? 'lit' : ''} onClick={() => set({pct: p})}>{p}%</button>)}
+        </span>
+      )}
+    </div>
+  );
+  const ptsLayer = pts && view.show !== 'dong' ? (visState?.layers || []).find((l: any) => l.id === pointIdOf(series!.variable.key)) : null;
+  const sizes = ptsLayer ? sizeLegendOf(ptsLayer) : null;
+  const sizeRow = sizes && (
+    <div className="tc-row tc-sizes" title={`Circle area by ${aggregateOn ? 'the period' : view.value === 'avg' ? 'its usual day' : 'the day'} — one scale for the whole period`}>
+      <span className="tc-lab">Size</span>
+      {sizes.map(({r, v}) => (
+        <span key={r} className="tc-size"><i style={{width: r * 2, height: r * 2}} />{fmt(v)}</span>
+      ))}
+    </div>
+  );
+
+  if (aggregateOn) {
+    const days = Math.round((hi - lo) / DAY) + 1;
+    const x = series?.variable;
+    const unit = x && x.unit !== 'ratio' && combineFor(x, view.combine) !== 'hotmild' ? ` ${x.unit}` : '';
+    const v = x ? aggregateFor(x, datasetOf(x), [lo, hi + DAY], view.combine, focus) : null;
+    return (
+      <section className="time-card glass tabbed" aria-label="Aggregate">
+        {tabs}
+        <div className="tc-head">
+          <div className="tc-date">
+            <span className="tc-day">{lo <= hi ? `${fmtDay(lo)} – ${fmtDay(hi)}` : '—'}</span>
+            <span className="tc-dow">{days} days · period from the ruler</span>
+          </div>
+          <div className="tc-speed">
+            <button className="tc-expand" onClick={onExpand} title="Larger timeline — chart, window and playback options"
+              aria-label="Open the larger timeline"><Maximize2 size={12} strokeWidth={1.9} /></button>
+          </div>
+        </div>
+        <div className="tc-row">
+          <span className="tc-lab">Combine</span>
+          {COMBINES.map((c) => (
+            <button key={c} className={`tc-pill${x && combineFor(x, view.combine) === c ? ' on' : ''}`} onClick={() => set({combine: c})}
+              disabled={c === 'sum' && !!x && !canSum(x)}
+              title={c === 'hotmild' ? 'Mean on hot days ÷ mean on mild days (the study’s heat and mild days)'
+                : c === 'sum' && x && !canSum(x) ? `${x.short} is a level, not a count: it does not add up over days` : undefined}>
+              {COMBINE_LABEL[c]}</button>
+          ))}
+        </div>
+        {valueRow(false)}
+        {showRow}
+        {sizeRow}
+        <div className="tc-foot">
+          <span className="tc-sigma" aria-hidden>Σ</span>
+          <span className="tc-var">{x?.short}</span>
+          <span className="tc-now">{fmt(v)}{v != null && unit}</span>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="time-card glass" aria-label="Time playback">
+    <section className="time-card glass tabbed" aria-label="Time playback">
+      {tabs}
       <div className="tc-head">
         <div className="tc-date">
           <span className="tc-day">{new Date(day).toISOString().slice(0, 10)}</span>
@@ -237,10 +371,14 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
             {chartOf(s, colourOf(s))}
           </div>
         ))}
+        {valueRow(true)}
         <div className="tc-foot">{playButton}</div>
       </> : <>
         {series && chartOf(series, colourOf(series))}
         {!series && <svg className="tc-chart" viewBox={`0 0 ${W} ${H}`} />}
+        {series && valueRow(true)}
+        {showRow}
+        {sizeRow}
         <div className="tc-foot">
           {playButton}
           <span className="tc-var">{series?.variable.short}</span>

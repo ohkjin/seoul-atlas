@@ -14,14 +14,21 @@ const ICON: Record<Item, LucideIcon> = {
 // The top row, floating over the map with no bar behind it: the name in the earlier
 // atlas's tracked capitals, in white; the search in the middle and the tool buttons on the
 // right, each on its own faint frosted fill. The tabs live in the rail.
-type BarProps = {onRecenter: () => void; is3d: boolean; onToggle3d: () => void; onClean: () => void; search: ReactNode};
+type BarProps = {onRecenter: () => void; is3d: boolean; onToggle3d: () => void; onClean: () => void; search: ReactNode;
+  only: string | null; onOnly: (project: string | null) => void};
 
-export default function TopBar({onRecenter, is3d, onToggle3d, onClean, search}: BarProps) {
+export default function TopBar({onRecenter, is3d, onToggle3d, onClean, search, only, onOnly}: BarProps) {
   return (
     <header className="topbar">
       <div className="brand"><span className="brand-mark" aria-hidden>✧</span>Seoul Data Atlas</div>
       {search}
       <div className="tools">
+        {/* narrowed to a study: its pill, ✕ back to everything */}
+        {only && (
+          <button className="only-pill" onClick={() => onOnly(null)} title="Back to everything">
+            <span aria-hidden>✧</span>Only {only}<span className="op-x" aria-hidden>✕</span>
+          </button>
+        )}
         {/* An SVG icon: the ⌖ glyph rendered narrow in the UI font and read as a microphone. */}
         <button className="icon-btn" title="Back to all of Seoul" aria-label="Back to all of Seoul" onClick={onRecenter}>
           <LocateFixed size={18} strokeWidth={1.75} />

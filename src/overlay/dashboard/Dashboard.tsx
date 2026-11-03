@@ -21,6 +21,8 @@ import {useWindowFrame, type Grip} from '../useWindowFrame';
 import Summary from './Summary';
 
 type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean; grain: Grain; is3d: boolean; playing: boolean;
+  // the study the atlas is narrowed to (the top bar's "Only UHUS"), or null for everything
+  only: string | null;
   onPick: (level: 'dong' | 'gu', code: string) => void; onSelect: (key: string) => void; onClose: () => void};
 
 // What every panel reads: the selection's values per place now, and the map's state.
@@ -31,7 +33,7 @@ export type DashCtx = Props & {vars: Variable[]; places: Place[]; series: Map<st
 // legend is (useWindowFrame: grips that show on hover, anchored to the nearer edges,
 // remembered), maximised by double-clicking its title bar — with views of the same
 // selection and focus as the map, each a half of the window: the scatter; the heat response
-// of the focused place; every place in order with the ten highest and lowest; the whole
+// of the focused place (UHUS's own view, so only while the atlas is narrowed to UHUS); every place in order with the ten highest and lowest; the whole
 // theme as maps with the place's profile; then for what is on the map, sales, their year
 // and the heat (SalesPanel); RHSI or SHAP, what drives it; daily weather, its year; a model
 // input, what it does to RHSI; anything else, its neighbourhoods by district. Any panel expands to fill the
@@ -77,15 +79,17 @@ export default function Dashboard(props: Props) {
   }, []);
   // one panel at a time fills the grid; Esc puts it back before it closes the window
   const [expanded, setExpanded] = useState<string | null>(null);
+  // leaving UHUS takes the heat response away; an expanded one must not leave the grid empty
+  useEffect(() => { if (props.only !== 'UHUS') setExpanded((e) => (e === 'heat' ? null : e)); }, [props.only]);
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { if (expanded) setExpanded(null); else onClose(); } };
     window.addEventListener('keydown', esc);
     return () => window.removeEventListener('keydown', esc);
   }, [onClose, expanded]);
-  const panel = (id: string, title: string, body: ReactNode) => {
+  const panel = (id: string, title: string, body: ReactNode, wide = false) => {
     const big = expanded === id, toggle = () => setExpanded(big ? null : id);
     return (
-      <section key={id} className={`dash-panel${big ? ' expanded' : expanded ? ' hidden' : ''}`}>
+      <section key={id} className={`dash-panel${wide ? ' wide' : ''}${big ? ' expanded' : expanded ? ' hidden' : ''}`}>
         <div className="dash-panel-head" onDoubleClick={toggle}>
           <h3>{title}</h3>
           <button className="dash-expand" onClick={toggle} aria-label={big ? `Restore ${title}` : `Expand ${title}`}
@@ -106,15 +110,17 @@ export default function Dashboard(props: Props) {
   const wide = vars.map((x) => ({key: x.key, kind: isSalesKey(x.key) ? 'sales'
     : x.key === 'RHSI_retail' || x.key.startsWith('shap_') ? 'shap'
     : isWeatherKey(x.key) ? 'weather' : isInputKey(x.key) ? 'effect' : x.dataset === 'dong' ? 'district' : null}))
-    .filter((w, i, a): w is {kind: string; key: string} => !!w.kind && a.findIndex((v) => v.kind === w.kind) === i);
+    .filter((w, i, a): w is {kind: string; key: string} => !!w.kind && a.findIndex((v) => v.kind === w.kind) === i)
+    // the SHAP panel is the longest, so it always comes last
+    .sort((a, b) => Number(a.kind === 'shap') - Number(b.kind === 'shap'));
   const name = (key: string) => VAR_BY_KEY[key]?.long ?? VAR_BY_KEY[key]?.short.replace(/ \(daily\)$/, '') ?? key;
   const widePanel = (w: {kind: string; key: string}) => {
     switch (w.kind) {
-      case 'sales': return panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />);
-      case 'shap': return panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />);
-      case 'weather': return panel('weather', 'Weather — the year, and the heat', <WeatherPanel ctx={ctx} weatherKey={w.key} />);
-      case 'effect': return panel('effect', `${name(w.key)} — what it does to heat sensitivity`, <EffectPanel ctx={ctx} inputKey={w.key} />);
-      default: return panel('district', `${name(w.key)} — by district`, <DistrictPanel ctx={ctx} varKey={w.key} />);
+      case 'sales': return panel('sales', 'Sales — the year, and the heat', <SalesPanel ctx={ctx} salesKey={w.key} />, true);
+      case 'shap': return panel('shap', 'What drives RHSI — SHAP', <ShapPanel ctx={ctx} />, true);
+      case 'weather': return panel('weather', 'Weather — the year, and the heat', <WeatherPanel ctx={ctx} weatherKey={w.key} />, true);
+      case 'effect': return panel('effect', `${name(w.key)} — what it does to heat sensitivity`, <EffectPanel ctx={ctx} inputKey={w.key} />, true);
+      default: return panel('district', `${name(w.key)} — by district`, <DistrictPanel ctx={ctx} varKey={w.key} />, true);
     }
   };
   return (
@@ -137,7 +143,7 @@ export default function Dashboard(props: Props) {
       <Summary ctx={ctx} />
       <div className={`dash-grid${expanded ? ' expanded' : ''}`} ref={grid}>
         {panel('scatter', vars.length === 2 ? 'Relationship' : 'Spread', <BigScatter ctx={ctx} />)}
-        {panel('heat', 'Heat response', <HeatResponse ctx={ctx} />)}
+        {props.only === 'UHUS' && panel('heat', 'Heat response', <HeatResponse ctx={ctx} />)}
         {panel('ranking', `Ranking${vars[0] ? ` — ${vars[0].long ?? vars[0].short}` : ''}`, <Ranking ctx={ctx} />)}
         {panel('theme', `${THEMES.find((t) => t.key === vars[0]?.theme)?.label ?? 'Theme'} at a glance`, <MiniMaps ctx={ctx} />)}
         {wide.map(widePanel)}

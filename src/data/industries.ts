@@ -10,6 +10,8 @@ const loaded = new Map<string, IndustryFile>();
 const pending = new Map<string, Promise<void>>();
 
 export const isIndustry = (key: string) => !!VAR_BY_KEY[key]?.industry;
+// loaded on demand: an industry, or a public daily dataset of the same shape (catalog `file`)
+export const isOnDemand = (key: string) => isIndustry(key) || !!VAR_BY_KEY[key]?.file;
 export const industryLoaded = (key: string) => loaded.has(key);
 
 // A place's own value — RHSI, a share — joined onto the daily tables too once a filter is
@@ -30,9 +32,9 @@ export function joinStatic(key: string, areas: Record<'gu' | 'dong', Areas | und
 export const dailyExtras = () => [...loaded.keys(), ...statics.keys()];
 
 export function loadIndustries(keys: string[]): Promise<void> {
-  return Promise.all(keys.filter((k) => isIndustry(k) && !loaded.has(k)).map((k) => {
+  return Promise.all(keys.filter((k) => isOnDemand(k) && !loaded.has(k)).map((k) => {
     if (!pending.has(k)) {
-      pending.set(k, fetch(`/data/industry/${k}.json`)
+      pending.set(k, fetch(VAR_BY_KEY[k]?.file ?? `/data/industry/${k}.json`)
         .then((r) => {
           if (!r.ok) throw new Error(`${k}: HTTP ${r.status}`);
           return r.json() as Promise<IndustryFile>;

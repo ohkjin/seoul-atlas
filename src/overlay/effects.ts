@@ -66,7 +66,8 @@ const shapeOf = (l: any) => [l.config.dataId, l.config.colorField?.name, l.confi
 // One halo per visible bubble layer of the atlas's, kept in step with it; none when off.
 export function syncHalos(dispatch: Dispatch, get: GetVisState, on: boolean) {
   const vs = get();
-  const bases = on ? vs.layers.filter((l: any) => l.type === 'point' && isOurs(l.id) && l.config.isVisible) : [];
+  // (not the station circles: a thousand glows would bury the map, stations.ts)
+  const bases = on ? vs.layers.filter((l: any) => l.type === 'point' && isOurs(l.id) && !l.id.startsWith('p:') && l.config.isVisible) : [];
   const wanted = new Map(bases.map((b: any) => [HALO_PREFIX + b.id, b]));
   for (const l of vs.layers) {
     if (!isHaloId(l.id)) continue;

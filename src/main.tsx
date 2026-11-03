@@ -5,6 +5,7 @@ import {store} from './store';
 import App from './App';
 import '@fontsource-variable/manrope';
 import './styles.css';
+import './overlay/dashboard/dashboard.css';   // after styles.css: the dashboard's rules win
 
 // Dev-only handles so the browser console can inspect kepler's state and the layout.
 if (import.meta.env.DEV) {

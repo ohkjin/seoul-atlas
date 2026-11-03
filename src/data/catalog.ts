@@ -29,6 +29,9 @@ export type Variable = {
   parent?: string;
   // one of the 84 industries of card sales: its column is loaded on demand (industries.ts)
   industry?: boolean;
+  // a public daily dataset in the same per-place, per-day shape, loaded on demand the same way
+  // (public/data/opendata, scripts/build-*.mjs)
+  file?: string;
   // a sum of other variables, worked out per neighbourhood when the data loads (uhus.ts)
   sumOf?: string[];
 };
@@ -58,6 +61,12 @@ export const VARIABLES: Variable[] = [
   v('elderly_share', 'people', 'dong', 'Elderly', 'Share of elderly population', 'ratio', 'Seoul Open Data Portal'),
   v('low_income_share', 'people', 'dong', 'Low income', 'Share of low-income population', 'ratio', 'Seoul Open Data Portal'),
   v('dnpr', 'people', 'dong', 'Day / night pop.', 'Daytime-to-nighttime population ratio', 'ratio', 'Seoul Open Data Portal'),
+  // living population per dong and day (Seoul × KT, OA-23016): the people present, averaged over the hours
+  ...[['livepop_mean', 'Population present (daily)', 'People present in the dong, mean over the 24 hours'],
+    ['livepop_day', 'Daytime population (daily)', 'People present in the dong, mean over 09–17 h'],
+    ['livepop_night', 'Night-time population (daily)', 'People present in the dong, mean over 00–05 h']].map(([key, short, full]) =>
+    ({...v(key, 'people', 'dong_daily', short, full, 'people', 'Seoul Open Data Plaza (Seoul × KT), 2024 daily', 'sum'),
+      file: `/data/opendata/${key}.json`})),
 
   v('residential_area_share', 'urban', 'dong', 'Residential', 'Residential land-use proportion', 'ratio', 'EGIS'),
   v('commercial_area_share', 'urban', 'dong', 'Commercial', 'Commercial land-use proportion', 'ratio', 'EGIS'),
@@ -92,6 +101,14 @@ export const VARIABLES: Variable[] = [
   v('bus_stop_density', 'mobility', 'dong', 'Bus stops', 'Density of bus stops', 'per km²', 'Seoul Open Data Portal'),
   v('parking_capacity', 'mobility', 'dong', 'Parking', 'Parking infrastructure intensity', 'per km²', 'Seoul Open Data Portal'),
   v('delta_daypop', 'mobility', 'dong', 'Heat pop. shift', 'Daytime-population response, hot vs mild days', 'log-ratio', 'Seoul Open Data Portal', 'mean', true),
+  // transit-card taps and bike rentals per dong and day, summed over the stations, stops and docks in it
+  ...[['subway_board', 'Subway boardings (daily)', 'Subway boardings at the stations in the dong (transit card)', 'OA-12914'],
+    ['subway_alight', 'Subway alightings (daily)', 'Subway alightings at the stations in the dong (transit card)', 'OA-12914'],
+    ['bus_board', 'Bus boardings (daily)', 'Bus boardings at the stops in the dong (transit card)', 'OA-12912'],
+    ['bus_alight', 'Bus alightings (daily)', 'Bus alightings at the stops in the dong (transit card)', 'OA-12912'],
+    ['bike_rentals', 'Bike rentals (daily)', 'Public-bike (Ttareungyi) rentals started at the docks in the dong', 'OA-15246']]
+    .map(([key, short, full, id]) => ({...v(key, 'mobility', 'dong_daily', short, full, key === 'bike_rentals' ? 'rentals' : 'people',
+      `Seoul Open Data Plaza ${id}, 2024 daily`, 'sum'), file: `/data/opendata/${key}.json`})),
 
   {...v('RHSI_retail', 'insights', 'dong', 'RHSI', 'Retail Heat Sensitivity Index — log-ratio of mean retail sales on hot vs mild days', 'log-ratio', 'UHUS analysis, 2024', 'mean', true),
     long: 'RHSI (Retail Heat Sensitivity Index)'}
@@ -192,8 +209,10 @@ export const layerIdOf = (key: string) => `v:${key}`;
 export const columnIdOf = (key: string) => `c:${key}`;
 // In 3D a static variable is drawn as a stipple of small H3 columns: layer h:key.
 export const cellIdOf = (key: string) => `h:${key}`;
+// A daily variable in the time card's Aggregate mode: its period combined per place, on the areas (overlay/timeModes.ts).
+export const aggIdOf = (key: string) => `g:${key}`;
 export const varOfLayerId = (id: string) =>
-  (id.startsWith('v:') || id.startsWith('c:') || id.startsWith('h:') ? VAR_BY_KEY[id.slice(2)] : undefined);
+  (['v:', 'c:', 'h:', 'g:', 'p:'].some((p) => id.startsWith(p)) ? VAR_BY_KEY[id.slice(2)] : undefined);
 
 // The dark line between areas, shared by every area layer (here and pair.ts). Chosen from
 // a side-by-side of 0.5–0.8px (mockups/border-lines.png, option B).

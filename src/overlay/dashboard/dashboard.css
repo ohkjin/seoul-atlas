@@ -1,0 +1,19 @@
+/* The dashboard's own styles, loaded after styles.css (main.tsx) so a rule here wins over
+   the same rule there. The dashboard's older rules still live in styles.css; new ones and
+   changes to them go here. */
+
+/* The wide panels under the halves (sales, SHAP, weather, an input's effect, by district):
+   a whole row each and as much height as they hold, so nothing in them scrolls but the
+   grid. The halves keep half the window's visible height (--grid-h, measured in
+   Dashboard.tsx) and scroll inside; one panel expanded fills the whole visible grid. */
+.dash-grid { --half: max(200px, calc(var(--grid-h, 640px) / 2 - 6px)); grid-auto-rows: auto; }
+@container (max-width: 760px) {
+  .dash-grid { --half: max(240px, calc(var(--grid-h, 640px) / 2 - 6px)); grid-auto-rows: auto; }
+}
+@container (min-width: 1400px) and (max-height: 620px) {
+  .dash-grid { --half: max(200px, calc(var(--grid-h, 640px) - 4px)); grid-auto-rows: auto; }
+}
+.dash-panel:not(.wide) { box-sizing: border-box; height: var(--half); }
+.dash-panel.wide { overflow: visible; min-height: max-content; }
+.dash-grid.expanded { grid-auto-rows: auto; }
+.dash-grid.expanded .dash-panel.expanded { box-sizing: border-box; height: calc(var(--grid-h, 640px) - 4px); min-height: 0; overflow: auto; }

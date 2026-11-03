@@ -8,3 +8,6 @@ Thumbs.db
 # Working documents stay local; README is the one document the repo keeps.
 *.md
 !README.md
+
+# Mockups (design drafts, screenshots, their build scripts) stay local too.
+mockups/

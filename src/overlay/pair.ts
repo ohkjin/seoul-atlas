@@ -3,6 +3,8 @@ import {AREA_STROKE, VAR_BY_KEY, colorRangeFor, heightScaleFor, type Variable} f
 import {valuesByPlace} from './focusValues';
 import {displayNameOf, type UhusData} from '../data/uhus';
 import type {Grain} from './layers';
+import {combineByPlace, combineFor, periodValues, type Combine} from './timeModes';
+import type {Period} from './TimeRuler';
 
 // Two neighbourhood variables on one map. kepler has no bivariate map, so each pair gets
 // its own small dataset — the places, both variables, and a `bivariate` class — and one
@@ -151,7 +153,11 @@ export function cellOf(colour: string | undefined): [number, number] | null {
 // Colours the pair layers that change with the day — the 2D grid and the 3D bc: layers —
 // for the playing day: each place's colour from that day's values (the rows the time
 // filter lets through; a static variable's own values). Skipped when nothing changed.
-export function recolourDailyPair(dispatch: Dispatch, visState: any) {
+// The time card's choices (timeModes.ts) reach the pair too: its thirds are cut among the places on the
+// playing day (vs Avg · same day, the default) or over every day of the period (Actual, vs Avg · all
+// days); in Aggregate a daily variable is the period combined per place instead of the day's value.
+export type PairTime = {basis: 'day' | 'period'; period: Period; combine?: Combine};
+export function recolourDailyPair(dispatch: Dispatch, visState: any, time?: PairTime) {
   for (const layer of visState?.layers || []) {
     if (!layer.config.isVisible) continue;
     // the 3×3 grid: on the areas in 2D (bi:), on the cells from afar in 3D (hb:, hc:)
@@ -170,7 +176,14 @@ export function recolourDailyPair(dispatch: Dispatch, visState: any) {
     const key = byDong ? 'dong_code' : 'gu_code';
     const valuesOf = (x: Variable) => {
       const ds = sourceOf(x);
+      if (ds && time?.combine && x.dataset !== 'dong') return combineByPlace(x, ds, time.period, combineFor(x, time.combine));
       return ds ? valuesByPlace(ds, x.key, key, x.dataset === 'dong' ? [] : visState.filters) : null;
+    };
+    // where the thirds are cut: the values coloured, or every day of the period
+    const cutsOf = (x: Variable, vals: Map<string, number>) => {
+      const ds = sourceOf(x);
+      const all = time?.basis === 'period' && !time.combine && x.dataset !== 'dong' && ds ? periodValues(ds, x.key, time.period) : null;
+      return all ? Array.from(all) : [...vals.values()];
     };
     const va = valuesOf(a), vb = grid ? valuesOf(b) : null;
     if (!area || !va || (grid && !vb)) continue;
@@ -180,7 +193,7 @@ export function recolourDailyPair(dispatch: Dispatch, visState: any) {
     let colorMap: [string, string][];
     let range: any;
     if (grid) {
-      const ta = thirdsOf([...va.values()]), tb = thirdsOf([...vb!.values()]);
+      const ta = thirdsOf(cutsOf(a, va)), tb = thirdsOf(cutsOf(b, vb!));
       colorMap = codes.map((code) => {
         const i = ta.level(va.get(code)), j = tb.level(vb!.get(code));
         return [code, i == null || j == null ? NO_DATA : BIVARIATE[i][j]];
@@ -189,7 +202,7 @@ export function recolourDailyPair(dispatch: Dispatch, visState: any) {
     } else {
       // A's ramp, cut evenly among the day's places
       const ramp = bubbleRange(a, []).colors;
-      const sorted = [...va.values()].sort((p, q) => p - q);
+      const sorted = cutsOf(a, va).sort((p, q) => p - q);
       const cuts = ramp.slice(1).map((_: string, i: number) => sorted[Math.min(sorted.length - 1, Math.floor(((i + 1) / ramp.length) * sorted.length))]);
       colorMap = codes.map((code) => {
         const v = va.get(code);

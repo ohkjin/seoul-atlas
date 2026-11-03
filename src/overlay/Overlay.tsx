@@ -1,17 +1,21 @@
-import {useEffect, useMemo, useRef, useState} from 'react';
+import {startTransition, useEffect, useMemo, useRef, useState} from 'react';
 import {X} from 'lucide-react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 import {cancelFlight, flyToBounds, flyToView} from './flyTo';
 import type {Bounds, Place, UhusData} from '../data/uhus';
 import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
-import {THEMES, VAR_BY_KEY, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
+import {THEMES, VAR_BY_KEY, colorRangeFor, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
+import {DATA_SPAN, spanOf} from '../data/sources';
 import {loadDongDaily} from '../data/uhus';
-import {dailyBase, dailyExtras, isIndustry, joinStatic, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
+import {dailyBase, dailyExtras, isOnDemand, joinStatic, loadIndustries, setDailyBase, withIndustries} from '../data/industries';
 import {useCamera, useVisState} from './useKepler';
 import {addDataToMap, onLayerClick, replaceDataInMap, setFilter, setFilterPlot, setFilterView, togglePerspective} from '@kepler.gl/actions';
-import {adaptElevation, drawSelection, layersOnMap, planFor, restylePair, setCellView, sync3d, syncOrder, toggleLink, withMain,
+import {adaptElevation, dataIdFor, drawSelection, layersOnMap, planFor, restylePair, setAggregateView, setCellView, setPointsShow, sync3d, syncOrder, toggleLink, withMain,
   syncTooltip, type Grain} from './layers';
-import {pairKeysOf, recolourDailyPair} from './pair';
+import {POINT_DATA, loadStations, pointsOf, putStationTables, stationTables, syncSpecks} from './stations';
+import {aggDataIdOf, aggregateTable, combineByPlace, combineFor, DEFAULT_TIME_VIEW, SEOUL_SCOPE, recolourAggregate, recolourTimeline, type Scope, type TimeView} from './timeModes';
+import {BIVARIATE, pairKeysOf, recolourDailyPair} from './pair';
+import type {Period} from './TimeRuler';
 import TopBar, {SideRail, type PageId} from './TopBar';
 import SearchBox from './SearchBox';
 import StatusBar from './StatusBar';
@@ -53,7 +57,11 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // a second). The camera is read where it is needed: as of now, or as a value (useCamera).
   const visState = useVisState();
   const camera = () => store.getState().keplerGl.map?.mapState;
-  const [focus, setFocus] = useState<Focus>({level: 'seoul'});
+  const [focus, setFocusNow] = useState<Focus>({level: 'seoul'});
+  // A new place redraws every panel for it (a fifth of a second and more): as a transition,
+  // React does that work in slices, between the frames of the flight that starts with it,
+  // instead of holding the map still until it is done.
+  const setFocus = (f: Focus) => startTransition(() => setFocusNow(f));
   const [grain, setGrainState] = useState<Grain>('dong');
   // What the map is about: up to two variables, linked from the drawer (🔗). Two of a
   // kind are shown on one shared layer (linked, the default) or ⛓ side by side.
@@ -83,7 +91,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     const next = as === 'main' ? withMain : toggleLink;
     const pick = ++latestPick.current[as];
     const current = () => pick === latestPick.current[as];
-    if (isIndustry(key) && !onTables(key)) {
+    if (isOnDemand(key) && !onTables(key)) {
       setIndustryLoading((l) => ({...l, [as]: key}));
       loadIndustries([key])
         .then(() => { refreshDailyTables(); return columnIn(key); })
@@ -121,7 +129,15 @@ export default function Overlay({data}: {data: UhusData | null}) {
     setRanges((cur) => { const next = {...cur}; if (r) next[key] = r; else delete next[key]; return next; });
   // daily playback (the time card steps day by day; see TimeCard)
   const [playing, setPlaying] = useState(false);
+  // the period the time ruler picks (TimeRuler): playback runs inside it, the drawer dims what
+  // has no data in it. It opens on the latest year the atlas has data for.
+  const [period, setPeriod] = useState<Period>(() => {
+    const last = new Date(DATA_SPAN[1]).getUTCFullYear();
+    return [Date.UTC(last, 0, 1), Date.UTC(last + 1, 0, 1)];
+  });
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  // the study the atlas is narrowed to (the drawer's "UHUS only"): what it does not use dims
+  const [onlyProject, setOnlyProject] = useState<string | null>(null);
   // the top bar's other tabs: a page covering the map (Data, About), and the settings panel
   const [page, setPage] = useState<PageId>('map');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -149,7 +165,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const setHeadline = (theme: ThemeKey, key: string) => {
     setHeadlineState((h) => ({...h, [theme]: key}));
     // an industry as a theme's headline needs its sales on the daily tables too
-    if (isIndustry(key) && !onTables(key)) loadIndustries([key]).then(refreshDailyTables).catch(() => {});
+    if (isOnDemand(key) && !onTables(key)) loadIndustries([key]).then(refreshDailyTables).catch(() => {});
   };
 
   const flyTo = (bounds: Bounds) => { const m = camera(); if (m) flyToBounds(dispatch, m, bounds); };
@@ -231,6 +247,30 @@ export default function Overlay({data}: {data: UhusData | null}) {
   cellRef.current = annotations.hexFar && (cellRef.current ? zoomBand < 2 : zoomBand < 1);
   setCellView(cellRef.current);
   const cellView = is3d && cellRef.current;
+  // The time card's folder tabs and Value row (timeModes.ts): Timeline or Aggregate; Actual or vs Avg
+  // (the default, on the same day). A linked pair keeps its own day-by-day grid, so Aggregate waits
+  // for one daily variable (or two side by side); set here, during render, like cellView.
+  const [timeShow, setTimeShow] = useState<TimeView>(DEFAULT_TIME_VIEW);
+  const hasDaily = selection.some((k) => VAR_BY_KEY[k] && isTemporal(VAR_BY_KEY[k]));
+  const pairedNow = linked && selection.length === 2 && planFor(selection, linked, grain).pairable;
+  const aggregateOn = timeShow.mode === 'aggregate' && hasDaily;
+  setAggregateView(aggregateOn);
+  setPointsShow(timeShow.show);
+  // Stations, stops and docks for the variable that has them (stations.ts): its tables built for the
+  // Show as and the ruler's period, then put on the map; the faint specks follow.
+  const ptsKey = timeShow.show === 'dong' ? null : selection.find((k) => pointsOf(k)) ?? null;
+  const hasLayers = (visState?.layers?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!ptsKey || !hasLayers || sandbox) return;
+    let live = true;
+    const x = VAR_BY_KEY[ptsKey];
+    loadStations(pointsOf(ptsKey).kind).then((file) => {
+      if (!live) return;
+      putStationTables(dispatch, store.getState().keplerGl.map.visState, stationTables(file, x, timeShow.show, timeShow.pct, period, timeShow.combine));
+    }).catch((e) => console.error('stations failed to load', e));
+    return () => { live = false; };
+  }, [ptsKey, timeShow.show, timeShow.pct, timeShow.combine, period[0], period[1], hasLayers, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (aggregateOn) setPlaying(false); }, [aggregateOn]);
   const toggle3d = () => dispatch(togglePerspective() as any);
   const fillIds = layersOnMap(visState).filter((x) => x.layer.type === 'geojson').map((x) => x.layer.id).join(',');
   const lastHeights = useRef<{is3d: boolean; fillIds: string} | null>(null);
@@ -264,7 +304,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // again after an industry's column rebuilt it (replaceDataInMap)
   useEffect(() => {
     if (timeIdx < 0) return;
-    const missing = ['gu_daily', 'dong_daily'].find((id) => visState?.datasets?.[id] && !timeDataIds.includes(id));
+    const missing = ['gu_daily', 'dong_daily', 'pts_daily'].find((id) => visState?.datasets?.[id] && !timeDataIds.includes(id));
     if (!missing) return;
     // dataset and field in one action: set apart, kepler filtered once in between with no
     // field name and logged an error
@@ -277,16 +317,74 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (!layersLoaded || !data || sandbox) return;
     // the store as of right now ('map' is the KeplerGl id in App.tsx)
     drawSelection(dispatch, () => store.getState().keplerGl.map.visState, {selection, linked, grain, is3d, data});
-  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox, cellView]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectionKey, linked, grain, layersLoaded, data, datasetKeys, is3d, sandbox, cellView, aggregateOn, timeShow.show === 'dong']);   // eslint-disable-line react-hooks/exhaustive-deps
   const pairLayerId = (visState?.layers || []).find((l: any) => l.config.isVisible && pairKeysOf(l.id))?.id;
   // the daily pair's grid takes the colours of the playing day (see pair.ts)
   const timeValue = timeIdx >= 0 ? visState.filters[timeIdx].value?.[0] : null;
   const playDay = timeValue != null ? Math.ceil(timeValue / 86400000) : null;
+  // the day on the map stays inside the period: moved to its first day when the period leaves it
+  const timeDomain = timeIdx >= 0 ? visState.filters[timeIdx].domain as [number, number] | undefined : undefined;
+  useEffect(() => {
+    if (timeIdx < 0 || !timeDomain || timeValue == null) return;
+    const lo = Math.max(period[0], timeDomain[0]), hi = Math.min(period[1] - 86400000, timeDomain[1]);
+    const day = Math.ceil(timeValue / 86400000) * 86400000;
+    if (lo <= hi && (day < lo || day > hi)) dispatch(setFilter(timeIdx, 'value', [lo, lo + 86400000 - 1]) as any);
+  }, [period[0], period[1], timeIdx, timeDomain?.[0], timeDomain?.[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the ruler's lines under its axis: the map's variables that have a span, each in its colour on
+  // the map — the 3×3 grid's rose and teal for a pair on the flat map, else a hue of its own ramp
+  const bands = useMemo(() => selection.flatMap((k, i) => {
+    const x = VAR_BY_KEY[k], span = spanOf(k);
+    if (!x || !span) return [];
+    const ramp = colorRangeFor(x)?.colors ?? [];
+    const colour = selection.length > 1 && linked && !is3d ? [BIVARIATE[2][0], BIVARIATE[0][2]][i] : ramp[Math.min(4, ramp.length - 1)];
+    return colour ? [{key: k, span, colour}] : [];
+  }), [selectionKey, linked, is3d]);   // eslint-disable-line react-hooks/exhaustive-deps
   const dailyGrid = (visState?.layers || []).filter((l: any) => l.config.isVisible && ['bi:', 'bc:', 'hb:', 'hc:'].some((p) => l.id.startsWith(p)))
     .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}`).join();
   useEffect(() => {
-    if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState);
-  }, [playDay, dailyGrid, datasetKeys, sandbox, filtersKey(visState?.filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
+    if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState, {period,
+      basis: timeShow.value === 'avg' && timeShow.base === 'same' ? 'day' : 'period', combine: aggregateOn ? timeShow.combine : undefined});
+  }, [playDay, dailyGrid, datasetKeys, sandbox, filtersKey(visState?.filters), timeShow.value, timeShow.base, timeShow.combine, aggregateOn,
+    period[0], period[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // A single daily layer takes the time card's Value for the playing day; an aggregate its period's
+  // combined values (timeModes.ts). Keyed on each layer's colour field too, so a layer drawn again
+  // with kepler's own colouring is put back on ours.
+  const keyOf = (prefixes: string[]) => (visState?.layers || []).filter((l: any) => l.config.isVisible && prefixes.some((p) => l.id.startsWith(p)))
+    .map((l: any) => `${l.id}@${l.config.dataId}:${l.config.colorField?.name}`).join();
+  const singleDaily = keyOf(['v:', 'c:', 'p:']), aggregates = keyOf(['g:', 'p:']);
+  // Aggregate's table: the areas with each daily variable drawn by dong combined over the period
+  // (timeModes.ts aggregateTable) — added once, replaced as the period or Combine changes
+  // (built once per input: replacing the table reorders kepler's datasets, which must not rebuild it again)
+  const aggBuilt = useRef('');
+  const dailyLoaded = ['gu_daily', 'dong_daily'].filter((id) => visState?.datasets?.[id]).join();
+  useEffect(() => {
+    if (!aggregateOn || pairedNow || !data || sandbox) { aggBuilt.current = ''; return; }
+    const vs = store.getState().keplerGl.map.visState;
+    const vars = selection.map((k) => VAR_BY_KEY[k]).filter((x) => x && isTemporal(x) && !(pointsOf(x.key) && timeShow.show !== 'dong'));
+    if (!vars.length || vars.some((x) => !vs.datasets[dataIdFor(x, grain)])) return;
+    const columns = vars.map((x) => [x, combineByPlace(x, vs.datasets[dataIdFor(x, grain)], period, combineFor(x, timeShow.combine))] as [typeof x, Map<string, number>]);
+    const id = aggDataIdOf(grain);
+    const input = [selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyFields, !!vs.datasets[id]].join('|');
+    if (input === aggBuilt.current) return;
+    aggBuilt.current = input;
+    const table = aggregateTable(grain === 'dong' ? (data.dong as any) : (data.gu as any), grain, columns);
+    const info = {id, label: `${grain === 'dong' ? 'Dong' : 'Gu'} · period`};
+    if (vs.datasets[id]) dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info, data: table} as any,
+      options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
+    else dispatch(addDataToMap({datasets: [{info, data: table}], options: {centerMap: false, keepExistingConfig: true, autoCreateLayers: false}} as any));
+  }, [aggregateOn, pairedNow, selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyLoaded, dailyFields, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const ptsRows = POINT_DATA.map((id) => visState?.datasets?.[id]?.dataContainer?.numRows?.() ?? 0).join();
+  useEffect(() => {
+    if (visState && !sandbox) syncSpecks(dispatch, store.getState().keplerGl.map.visState, ptsKey, timeShow);
+  }, [ptsKey, timeShow.show, ptsRows, layerCount, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // vs Avg is against the places in view: the focused district's dongs, else all of Seoul
+  const avgScope: Scope = grain === 'dong' && focus.level !== 'seoul' ? {prefix: focus.gu.code, name: focus.gu.name} : SEOUL_SCOPE;
+  useEffect(() => {
+    if (visState && singleDaily && !sandbox) recolourTimeline(dispatch, store.getState().keplerGl.map.visState, timeShow, period, avgScope);
+  }, [playDay, singleDaily, datasetKeys, sandbox, timeShow.value, timeShow.base, period[0], period[1], avgScope.prefix]);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (visState && aggregates && !sandbox) recolourAggregate(dispatch, store.getState().keplerGl.map.visState, timeShow, period, grain, avgScope);
+  }, [aggregates, datasetKeys, sandbox, timeShow.value, timeShow.combine, period[0], period[1], grain, avgScope.prefix]);   // eslint-disable-line react-hooks/exhaustive-deps
   // (the store as of now: a pair dropped in this render's draw must not be restyled)
   useEffect(() => { if (visState && !sandbox) restylePair(dispatch, store.getState().keplerGl.map.visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -424,7 +522,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
           fading out at the edges so it reads as no box at all. It must be the FIRST
           child — painted later, it frosted the top bar too and swallowed the tabs. */}
       {ready && !sidePanelOpen && !sandbox && <div className="focus-frost" aria-hidden />}
-      <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d} onClean={enterClean}
+      <TopBar onRecenter={focusSeoul} is3d={is3d} onToggle3d={toggle3d} onClean={enterClean} only={onlyProject} onOnly={setOnlyProject}
         search={<SearchBox data={data} selection={selection} onGu={focusGu} onDong={focusDong} onVariable={(k) => select(k, 'main')} />} />
       {clean && (
         <button className="clean-exit" onClick={() => setClean(false)}>
@@ -458,12 +556,15 @@ export default function Overlay({data}: {data: UhusData | null}) {
       )}
       {ready && temporalOn && !sandbox && !timeExpanded && (
         <TimeCard focus={focus} selection={selection} linked={linked} is3d={is3d} grain={grain} playing={playing}
-          onPlaying={setPlaying} onExpand={expandTime} />
+          period={period} onPlaying={setPlaying} onExpand={expandTime}
+          view={timeShow} onView={setTimeShow} aggregateOn={aggregateOn} paired={pairedNow} scopeName={avgScope.name} />
       )}
       {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select}
+        only={onlyProject} onOnly={setOnlyProject}
+        period={period} onPeriod={setPeriod} day={playDay != null ? playDay * 86400000 : null} bands={bands}
         loading={Object.values(industryLoading).filter(Boolean) as string[]} />}
       {ready && dashboardOpen && !sandbox && (
-        <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing}
+        <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing} only={onlyProject}
           onSelect={select} onClose={() => setDashboardOpen(false)}
           onPick={(level, code) => {
             if (level === 'dong') { const d = data!.dongs.find((x) => x.code === code); if (d) focusDong(d); }
@@ -471,7 +572,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
           }} />
       )}
       {ready && !sandbox && <StatusBar selection={selection} />}
-      {page === 'data' && <DataPage selection={selection} onSelect={select} onClose={closePage} />}
+      {page === 'data' && <DataPage selection={selection} onSelect={select} onClose={closePage} only={onlyProject} />}
       {page === 'about' && <AboutPage onClose={closePage} />}
     </div>
   );

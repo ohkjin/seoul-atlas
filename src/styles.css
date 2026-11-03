@@ -7,6 +7,7 @@
   --bar-h: 30px;            /* the status bar along the foot of the screen (StatusBar.tsx) */
   --floor: calc(var(--edge) + var(--bar-h));   /* where the bottom-anchored panels stand: on the status bar */
   --card-h: 92px;           /* drawer theme cards — the original infographic bar height */
+  --ruler-h: 46px;          /* the time ruler over the cards (TimeRuler.tsx), with its gap */
   --list-h: min(330px, calc(var(--ui-h) * 0.4));
   --focus-w: 300px;
   --graph-w: 320px;
@@ -92,6 +93,13 @@ button { font: inherit; color: inherit; }
   text-shadow: 0 1px 3px rgba(0,0,0,0.55), 0 0 14px rgba(0,0,0,0.45); }
 .brand-mark { font-size: 20px; letter-spacing: 0; color: #fff; }
 .tools { flex: none; display: flex; gap: 6px; }
+/* narrowed to a study (TopBar): its pill, ✕ back to everything */
+.only-pill { align-self: center; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; margin-right: 4px;
+  border-radius: 999px; border: 1px solid rgba(232,163,92,0.5); background: rgba(232,163,92,0.12); color: var(--accent);
+  font: inherit; font-size: 12px; cursor: pointer; }
+.only-pill .op-x { color: var(--ink-3); font-size: 11px; margin-left: 2px; }
+.only-pill:hover .op-x { color: var(--ink); }
+.ds-card.out { opacity: 0.35; }
 
 /* ---------- search: in the middle of the top bar ---------- */
 /* No bar behind the row, but the search and the tool buttons each keep a faint frosted
@@ -222,7 +230,7 @@ body.sandbox { --bar-h: 0px; }
 .focus { position: absolute; left: calc(var(--inset) + 6px); top: calc(var(--topbar-h) + var(--gap) * 3);
   width: var(--focus-w);
   /* Runs down to just above the infographic cards; nothing else shares this column. */
-  max-height: calc(100% - var(--topbar-h) - var(--gap) * 3 - var(--floor) - var(--card-h) - 12px);
+  max-height: calc(100% - var(--topbar-h) - var(--gap) * 3 - var(--floor) - var(--card-h) - var(--ruler-h) - 12px);
   overflow-y: auto; overflow-x: hidden; text-shadow: 0 1px 12px rgba(0,0,0,0.6); }
 .crumbs { display: flex; gap: 8px; min-width: 0; font-size: 11px; letter-spacing: 0.14em; color: var(--ink-2); }
 .crumb { background: none; border: 0; padding: 0; cursor: pointer; letter-spacing: inherit; color: inherit; }
@@ -272,6 +280,19 @@ body.sandbox { --bar-h: 0px; }
   transition: color 0.15s, background-color 0.15s, border-color 0.15s; }
 .link-btn:hover { color: var(--ink); background: rgba(255,255,255,0.1); }
 .link-btn.on { color: var(--accent); border-color: rgba(232, 163, 92, 0.35); }
+.lc-between { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; margin: 2px 0; container: between / inline-size; }
+.lc-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lc-rule { flex: 1; min-width: 8px; height: 0; border-top: var(--hair) solid var(--glass-line); }
+.lc-between .link-btn { margin: 0; align-self: auto; flex: none; }
+/* ⇅ Swap stands in the exact middle; where the left half is too narrow for "Linked · one map", "Linked" alone */
+@container between (max-width: 360px) { .lb-more { display: none; } }
+.link-btn.lc-swap { padding: 5px 11px 5px 9px; }
+/* the second card: the rule between them stands in for its top line */
+.lc-between + .layer-card { border-top: 0; padding-top: 0; }
+/* ✕ on a card: off the map */
+.lc-drop { order: 9; margin-left: auto; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0;
+  border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; transition: color 0.12s, background-color 0.12s; }
+.lc-drop:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
 .lc-theme { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent); }
 .lc-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .lc-name { min-width: 0; font-size: 14px; }
@@ -293,12 +314,23 @@ body.sandbox { --bar-h: 0px; }
 .info-tip { flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px; background: none;
   display: inline-grid; place-items: center; color: var(--ink-3); cursor: help; transition: color 0.12s, background-color 0.12s; }
 .info-tip:hover, .info-tip:focus-visible { color: var(--ink); background: rgba(255,255,255,0.08); }
+.info-tip.bright { color: var(--ink); }
+.info-pop .ip-kicker { margin: 0 0 2px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+.info-pop .ip-about { margin: 6px 0 10px; line-height: 1.5; }
 .info-pop { position: fixed; z-index: 1000; box-sizing: border-box; padding: 12px 14px; border-radius: 14px; pointer-events: none;
   background: rgba(17, 19, 23, 0.94); border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 18px 44px -14px rgba(0,0,0,0.7);
   font-family: var(--sans); font-size: 12px; color: var(--ink-2); }
 .info-pop.up { transform: translateY(-100%); }
 .ip-full { margin: 0 0 10px; font-size: 13px; line-height: 1.45; color: var(--ink); }
 .info-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin: 0; }
+/* the variable's ladder: Source → Processed → Research, the step it stands on lit */
+.ip-ladder { display: flex; margin: 0 0 10px; }
+.ip-step { flex: 1; min-width: 0; padding: 5px 7px; border: 1px solid rgba(255,255,255,0.08); font-size: 10.5px; line-height: 1.35; color: var(--ink-3); }
+.ip-step:first-child { border-radius: 8px 0 0 8px; } .ip-step:last-child { border-radius: 0 8px 8px 0; } .ip-step + .ip-step { border-left: 0; }
+.ip-step b { display: block; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; color: var(--ink-3); margin-bottom: 2px; }
+.ip-step.done { color: var(--ink-2); }
+.ip-step.here { color: var(--ink); background: rgba(232,163,92,0.08); }
+.ip-step.here b { color: var(--accent); }
 .info-pop dt { color: var(--ink-3); }
 .info-pop dd { margin: 0; }
 .lc-value { font-size: 22px; font-weight: 300; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
@@ -375,7 +407,7 @@ body.sandbox { --bar-h: 0px; }
 .dash-close { flex: none; display: grid; place-items: center; background: rgba(255,255,255,0.06); border-color: transparent;
   color: var(--ink-2); cursor: pointer; }
 .dash-close:hover { color: var(--ink); background: rgba(255,255,255,0.14); }
-/* Every panel is a half: two to a row, each half the window's visible height (--grid-h,
+/* Every panel is a half: two to a row (the wide ones a row to themselves), each half the window's visible height (--grid-h,
    measured in Dashboard.tsx), more below as the grid scrolls; a panel's own content scrolls
    inside it. One panel expanded fills the whole visible grid, the others hidden. */
 .dash-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr;
@@ -391,6 +423,8 @@ body.sandbox { --bar-h: 0px; }
 }
 .dash-grid.expanded { grid-template-columns: 1fr; grid-auto-rows: calc(var(--grid-h, 640px) - 4px); }
 .dash-panel.hidden { display: none; }
+/* the wide panels under them (sales, SHAP, weather, an input's effect, by district): a whole row, still half high */
+.dash-panel.wide { grid-column: 1 / -1; }
 .dash-panel-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
 .dash-panel-head h3 { margin: 0 !important; }
 .dash-expand { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px;
@@ -470,7 +504,7 @@ body.sandbox { --bar-h: 0px; }
 .sp-key.heat { height: 10px; vertical-align: -1px; background: rgba(192,56,59,0.45); }
 .sp-key.mild { height: 3px; vertical-align: 2px; background: #3079B4; }
 .sp-sub { margin: 14px 0 8px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);
-  font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+  font: 10px 'IBM Plex Mono', monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
 .sp-words h4 { margin: 12px 0 5px; font-size: 11px; font-weight: 500; }
 @container (max-width: 640px) { .sp-top, .sp-break { grid-template-columns: 1fr; gap: 10px; } }
 /* the weather panel: the Sales panel's frame (WeatherPanel.tsx) */
@@ -519,7 +553,7 @@ body.sandbox { --bar-h: 0px; }
 .dash-panel { display: flex; flex-direction: column; }
 .dash-panel > .gc-plot { flex: 1 1 auto; min-height: 120px; height: 0; }
 .dash-panel > * { flex: none; }
-.dash-panel h3 { margin: 0 0 6px; font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.dash-panel h3 { margin: 0 0 6px; font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
 .dash-empty { margin: 24px 0; text-align: center; font-size: 12px; color: var(--ink-3); }
 /* heat response */
 .hr-mild { fill: rgba(48, 121, 180, 0.08); }
@@ -604,7 +638,7 @@ body.sandbox { --bar-h: 0px; }
 .dash-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .kpi { min-width: 0; padding: 2px 14px 2px 14px; border-left: var(--hair) solid var(--glass-line); }
 .kpi:first-child { padding-left: 2px; border-left: 0; }
-.kpi-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3);
+.kpi-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi-label span { letter-spacing: 0.04em; text-transform: none; }
 .kpi-value { margin-top: 2px; font-size: 22px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.15; color: var(--ink);
@@ -638,6 +672,7 @@ body.sandbox { --bar-h: 0px; }
 .legend { margin-top: 8px; width: 168px; }
 .legend-bar { height: 4px; border-radius: 999px; }
 .legend-size { letter-spacing: 0.02em; opacity: 0.85; }
+.legend-note { margin-top: 2px; font-size: 10.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 /* bivariate pair: each card's own axis of the grid as three steps; A's card adds the 3×3 key */
 .legend-axis { display: flex; align-items: flex-end; gap: 12px; }
 .legend-steps { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
@@ -662,7 +697,7 @@ body.sandbox { --bar-h: 0px; }
 
 /* ---------- time card: foot of the right column, in the spirit of kepler's enlarged
    playback widget. kepler's own widget stays mounted (hidden) to run the animation. ---------- */
-.time-card { position: absolute; right: var(--gap); bottom: calc(var(--floor) + var(--card-h) + 12px); width: var(--graph-w);
+.time-card { position: absolute; right: var(--gap); bottom: calc(var(--floor) + var(--card-h) + var(--ruler-h) + 12px); width: var(--graph-w);
   box-sizing: border-box; padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
 .tc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .tc-date { display: flex; flex-direction: column; }
@@ -695,6 +730,31 @@ body.sandbox { --bar-h: 0px; }
 .tc-seg { display: inline-flex; border: 1px solid var(--glass-line); border-radius: 999px; padding: 2px; }
 .tc-seg button { background: none; border: 0; border-radius: 999px; padding: 2px 9px; font-size: 10.5px; color: var(--ink-3); cursor: pointer; }
 .tc-seg button.on { background: rgba(255,255,255,0.12); color: var(--ink); }
+/* Aggregate | Timeline: two folder tabs standing on the card's top edge, the open one joined to it
+   (timeModes.ts; mockups/time-modes/card.png). Under the chart, Value: Actual · [vs Avg | same day |
+   all days], every part a chosen or an unchosen pill. */
+.time-card.tabbed { border-top-left-radius: 0; }
+.tc-tabs { position: absolute; left: calc(-1 * var(--hair)); bottom: 100%; display: flex; gap: 3px; }
+.tc-tab { font: inherit; font-size: 11.5px; color: var(--ink-2); padding: 5px 12px 6px; border-radius: 10px 10px 0 0; cursor: pointer;
+  background: rgba(40, 44, 52, 0.92); border: var(--hair) solid rgba(255,255,255,0.14); border-bottom: 0; }
+.tc-tab.on { color: var(--ink); background: var(--glass-bg-solid); border-color: var(--glass-line); font-weight: 500;
+  position: relative; top: var(--hair); }
+.tc-tab:disabled { color: #484f58; cursor: default; }
+.tc-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.tc-lab { width: 62px; flex: none; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.tc-pill, .tc-combo button { font: inherit; font-size: 11px; color: var(--ink-3); background: none; cursor: pointer; white-space: nowrap;
+  border: var(--hair) solid var(--glass-line); border-radius: 999px; padding: 2px 8px; }
+.tc-pill.on, .tc-combo button.lit { color: #0b0d11; background: var(--ink); border-color: var(--ink); }
+.tc-pill:disabled { color: #484f58; cursor: default; }
+.tc-combo { display: inline-flex; border: var(--hair) solid var(--glass-line); border-radius: 999px; overflow: hidden; }
+.tc-combo button { border: 0; border-radius: 0; }
+.tc-combo button + button { border-left: var(--hair) solid var(--glass-line); }
+.tc-combo button.lit + button.lit { border-left-color: rgba(11, 13, 17, 0.15); }
+.tc-sizes { gap: 10px; }
+.tc-size { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tc-size i { display: inline-block; border-radius: 50%; background: rgba(143, 227, 220, 0.62); }
+.tc-sigma { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 50%;
+  border: var(--hair) solid var(--glass-line); color: var(--ink-2); font-size: 12px; }
 
 /* ========== Bottom drawer — its own design, scoped so it neither leaks nor inherits ========== */
 .drawer {
@@ -726,8 +786,8 @@ body.sandbox { --bar-h: 0px; }
   transition: height 0.42s var(--ease), opacity 0.22s; }
 .drawer-sheet::before { content: ''; position: absolute; left: 50%; top: 10px; width: 38px; height: 4px; margin-left: -19px;
   border-radius: 999px; background: rgba(255,255,255,0.2); }
-.drawer.open .drawer-sheet { height: calc(var(--card-h) + var(--list-h) + var(--edge) + 58px); opacity: 1; pointer-events: auto; }
-.drawer-close { position: absolute; right: 0; top: -48px; z-index: 2; width: 34px; height: 34px; color: var(--ink-2);
+.drawer.open .drawer-sheet { height: calc(var(--card-h) + var(--list-h) + var(--edge) + var(--ruler-h) + 58px); opacity: 1; pointer-events: auto; }
+.drawer-close { position: absolute; right: 0; top: calc(-48px - var(--ruler-h)); z-index: 2; width: 34px; height: 34px; color: var(--ink-2);
   background: rgba(255,255,255,0.06); }
 .drawer-close:hover { background: rgba(255,255,255,0.12); }
 .drawer-cols { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
@@ -762,7 +822,119 @@ body.sandbox { --bar-h: 0px; }
 /* in a row: name, its ⓘ (shown while the row is hovered), then the map button and 🔗 at the far end */
 .drow .info-tip { opacity: 0; }
 .drow:hover .info-tip, .drow .info-tip:focus-visible { opacity: 1; }
-.drow .dicon.map { margin-left: auto; }
+/* the studies' column (Drawer): a study's head over its results, and a quiet line for those to come */
+.dproj-head { list-style: none; margin: 0 0 4px; padding: 7px 6px 8px 8px; border-radius: 10px; background: rgba(255,255,255,0.03); }
+.dph-top { display: flex; align-items: center; gap: 6px; }
+.dph-star { color: var(--accent); font-size: 13px; }
+.dph-name { font-size: 12.5px; font-weight: 500; letter-spacing: 0.06em; color: var(--ink); }
+.drawer .dph-only { margin-left: auto; padding: 3px 11px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.26); background: rgba(255,255,255,0.04);
+  color: var(--ink-2); font: inherit; font-size: 10.5px; cursor: pointer; transition: color 0.12s, background-color 0.12s, border-color 0.12s; }
+.drawer .dph-only:hover { color: var(--ink); border-color: rgba(234,168,81,0.5); }
+.drawer .dph-only.on { color: #16191e; background: var(--accent); border-color: var(--accent); }
+.dph-line { margin: 3px 0 0 19px; font-size: 10.5px; line-height: 1.45; color: var(--ink-3); }
+.dproj-soon { list-style: none; margin-top: 8px; padding: 8px 8px 2px; border-top: 1px solid var(--line); font-size: 10.5px; color: var(--ink-4); }
+/* narrowed to a study: what it does not use, dimmed at the end of its list */
+.drow.out { opacity: 0.3; }
+/* no data in the time ruler's period: dimmed in place, still pickable */
+.drow.untimed { opacity: 0.35; }
+.drow.untimed:hover { opacity: 0.7; }
+
+/* ---------- the time ruler (TimeRuler.tsx): over the cards, no box of its own ---------- */
+.time-ruler { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); height: 40px; z-index: 3;
+  font-variant-numeric: tabular-nums; user-select: none; transition: bottom 0.42s var(--ease); }
+/* expanded, the axis rises with the sheet and the lines under it unfold into the list, down to the cards */
+.drawer.expanded .time-ruler { bottom: calc(100% + 6px + var(--cov-h)); }
+.drawer.expanded .tr-band { opacity: 0; }
+.tr-track { position: absolute; left: 0; right: 132px; top: 0; bottom: 0; cursor: crosshair; touch-action: none; }
+.tr-track.days { cursor: grab; }
+.time-ruler.dragging .tr-track.days { cursor: grabbing; }
+.tr-base { position: absolute; left: 0; right: 0; top: 19px; height: 1px; background: rgba(255,255,255,0.14); pointer-events: none; }
+/* the period: the axis between its ends lit, and a band over it to drag it by */
+.tr-seg { position: absolute; top: 12px; height: 15px; cursor: grab; }
+.tr-seg::before { content: ''; position: absolute; left: 0; right: 0; top: 7px; height: 1px; background: rgba(255,255,255,0.85); }
+.time-ruler.dragging .tr-seg { cursor: grabbing; }
+.tr-tk { position: absolute; width: 1px; pointer-events: none; background: rgba(255,255,255,0.24); }
+.tr-tk.major { top: 14px; height: 10px; background: rgba(255,255,255,0.34); }
+.tr-tk.major.in { height: 11px; background: var(--ink); }
+/* months (Years) or days (Days) inside the period: only while you are at the ruler */
+.tr-tk.minor { top: 17px; height: 5px; background: var(--ink); opacity: 0; transition: opacity 0.18s; }
+.time-ruler:hover .tr-tk.minor, .drawer.open .tr-tk.minor, .time-ruler.dragging .tr-tk.minor { opacity: 1; }
+.tr-lb { position: absolute; top: 0; transform: translateX(-50%); font-size: 10.5px; color: var(--ink-3); white-space: nowrap; pointer-events: none;
+  text-shadow: 0 0 4px #0b0d11, 0 0 8px #0b0d11, 0 0 2px #0b0d11; }
+.tr-lb.left { transform: none; margin-left: 4px; color: var(--ink-2); }
+.tr-lb.day { font-size: 10px; }
+.tr-lb.in { color: var(--ink); }
+/* an end: a ▾ over the axis, with room around it to grab */
+.drawer .tr-cap { position: absolute; top: 6px; width: 14px; height: 20px; margin-left: -7px; cursor: ew-resize; }
+.drawer .tr-cap::before { content: ''; position: absolute; left: 3px; top: 6px; border-left: 4px solid transparent; border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink); }
+.tr-more { position: absolute; top: 12px; font-size: 9px; color: var(--ink); pointer-events: none; }
+.tr-more.l { left: -12px; } .tr-more.r { right: -12px; }
+.tr-day { position: absolute; top: 12px; width: 2px; height: 15px; margin-left: -1px; border-radius: 1px; background: var(--ink); pointer-events: none; }
+.tr-band { position: absolute; height: 2px; border-radius: 1px; pointer-events: none; }
+.tr-side { position: absolute; right: 0; top: 0; display: flex; align-items: center; gap: 8px; height: 26px; }
+.tr-zoom { display: flex; gap: 4px; }
+/* Years and Days in one rounded outline, in the chosen one's white */
+.drawer .tr-zoom { gap: 0; padding: 0 2px; border: 1px solid var(--ink); border-radius: 999px; }
+.drawer .tr-zoom button { padding: 1px 6px; border-radius: 999px; font-size: 10.5px; color: #8f97a3; text-shadow: 0 0 6px #0b0d11; }
+.drawer .tr-zoom button:hover { color: var(--ink-2); }
+.drawer .tr-zoom button.on { color: var(--ink); }
+.drawer.open .tr-lb, .drawer.open .tr-zoom button { text-shadow: none; }
+/* the expand: a filled round button, left of the zoom */
+.drawer .tr-expand { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border-radius: 999px;
+  background: rgba(255,255,255,0.12); color: var(--ink); transition: background-color 0.12s; }
+.drawer .tr-expand:hover { background: rgba(255,255,255,0.2); }
+.drawer .tr-expand.on svg { transform: rotate(180deg); }
+/* Days: where the weeks on screen sit in the whole span */
+.tr-sb { position: absolute; left: 0; right: 0; top: 39px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); cursor: pointer; }
+.tr-sb i { position: absolute; top: 0; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.35); cursor: grab; }
+.tr-sb i:hover, .time-ruler.dragging .tr-sb i { background: rgba(255,255,255,0.55); }
+/* expanded: the sheet rises to just under the top bar ("rise": from the cards' top to there),
+   and every variable's days are listed above the axis, scrolling */
+.drawer { --rise: calc(var(--ui-h) - var(--floor) - var(--card-h) - var(--list-h) - 10px - var(--topbar-h) - 20px);
+  --cov-h: calc(var(--rise) - var(--ruler-h) - 40px); }
+.drawer.expanded .drawer-sheet { height: calc(var(--rise) + var(--card-h) + var(--list-h) + 10px + var(--edge)); }
+.drawer.expanded .dkey { top: calc(14px - var(--rise)); }
+.drawer.expanded .drawer-close { top: calc(8px - var(--rise)); }
+.tr-cov { position: absolute; left: 0; right: 132px; top: calc(100% + 8px); height: calc(var(--cov-h) - 8px);
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent;
+  animation: tr-cov-in 0.3s 0.12s both; }
+@keyframes tr-cov-in { from { opacity: 0; } to { opacity: 1; } }
+.tr-win { position: absolute; top: 0; bottom: 0; background: rgba(255,255,255,0.035); pointer-events: none; }
+.tr-grp { position: relative; margin-top: 6px; padding: 12px 0 2px; border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-3); }
+.tr-cov > .tr-line:first-of-type { margin-top: 2px; }
+.tr-line { position: relative; height: 26px; transition: opacity 0.15s; }
+.tr-line.off { opacity: 0.32; }
+.tr-nm { position: absolute; top: 1px; font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.tr-nm small { margin-left: 6px; font-size: 10px; color: var(--ink-3); }
+.tr-line.onmap .tr-nm { color: var(--ink); }
+.tr-bar { position: absolute; top: 16px; height: 5px; border-radius: 3px; box-sizing: border-box; }
+.tr-bar.aggregate { border: 1px solid; background: none; }   /* hollow: one value over the period */
+.tr-ring { position: absolute; top: 14px; width: 9px; height: 9px; margin-left: -4.5px; border-radius: 50%; border: 1.5px solid; box-sizing: border-box; }
+.tr-snap { position: absolute; left: 0; right: 0; top: 18px; border-top: 1px dashed rgba(238, 242, 247, 0.22); }
+.drow .dprov { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 6px; flex: none; }
+/* how far from the raw data (Drawer provenance): Source / Processed / Research as a word; the
+   study a Processed or Research variable belongs to; a lock when the data is restricted */
+.dlock { color: var(--ink-3); }
+.dtier { font-size: 9px; letter-spacing: 0.04em; line-height: 14px; padding: 0 5px; border-radius: 4px; border: 1px solid; }
+.dtier.source { color: #8fb3d9; border-color: rgba(143,179,217,0.4); }
+.dtier.processed { color: #b7a3e0; border-color: rgba(183,163,224,0.4); }
+.dtier.research { color: var(--accent); border-color: rgba(234,168,81,0.5); }
+/* the key, for the marks: only while they are marks */
+.dkey { display: none; position: absolute; right: 48px; top: calc(-40px - var(--ruler-h)); z-index: 2; gap: 14px; font-size: 10.5px; color: var(--ink); }
+.dkey span { display: inline-flex; align-items: center; gap: 6px; }
+/* narrow — a theme's column under ~340px — the word becomes a mark: a dot (Source), a ring
+   (Processed), the atlas's ✧ (Research), told apart by shape as well as colour */
+.drawer { container: drawer / inline-size; }
+@container drawer (max-width: 2040px) {
+  .drawer .dtier { font-size: 0; line-height: 0; width: 7px; height: 7px; padding: 0; box-sizing: border-box; border-radius: 50%; }
+  .drawer .dtier.source { background: #8fb3d9; border: 0; }
+  .drawer .dtier.processed { background: none; border: 1.5px solid #b7a3e0; }
+  .drawer .dtier.research { width: auto; height: auto; border: 0; }
+  .drawer .dtier.research::before { content: '✧'; font-size: 12px; line-height: 1; color: var(--accent); }
+  .drawer .dkey { display: flex; }
+}
 /* the map button: this row as the map's main (its colour); lit on the main */
 .dicon.map.on { color: var(--accent); }
 .dpick input { appearance: none; -webkit-appearance: none; flex: none; width: 14px; height: 14px; margin: 0; border-radius: 999px;
@@ -859,7 +1031,7 @@ body:not(.sandbox) .side-panel--container .side-bar__close { display: none !impo
 body.kepler-side-open .side-panel--container, body.sandbox .side-panel--container {
   zoom: var(--ui-zoom);   /* like the overlay (uiScale.ts); its offsets below scale with it */
   top: calc(var(--topbar-h) + var(--gap) * 2) !important;
-  bottom: calc(var(--floor) + var(--card-h) + var(--gap)) !important;
+  bottom: calc(var(--floor) + var(--card-h) + var(--ruler-h) + var(--gap)) !important;
   height: auto !important;
 }
 
@@ -957,6 +1129,27 @@ body.kepler-side-open .side-panel--container, body.sandbox .side-panel--containe
 .page-section { padding-top: 40px; border-top: 1px solid rgba(255,255,255,0.08); margin-bottom: 44px; }
 .page-h { font-weight: 600; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8C93A3; margin: 0 0 16px; }
 .page-h span { font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: rgba(255,255,255,0.4); }
+/* the Data page's two parts, Public and Research: big caps under a brighter rule, how many on the right */
+.page-section.dp-part { padding-top: 22px; border-top-color: rgba(255,255,255,0.28); }
+.dp-part-head { margin: 0 0 22px; }
+.dp-part-row { display: flex; align-items: baseline; gap: 12px; }
+.dp-part-h { margin: 0; font-weight: 600; font-size: 20px; letter-spacing: 0.18em; text-transform: uppercase; color: #F4F1EA; }
+.dp-part-count { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #8C93A3; }
+.dp-part-sub { margin: 6px 0 0; font-size: 14px; color: rgba(255,255,255,0.5); }
+/* the Data page's Research part: a study's head — what it asks, its period — over the data it is built on */
+.dp-study { margin-bottom: 36px; transition: opacity 0.2s; }
+.dp-study.out { opacity: 0.35; }
+.dp-head { padding: 20px 22px; margin-bottom: 22px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+.dp-kicker { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #E8A35C; }
+.dp-name { margin: 4px 0 8px; font-size: 22px; font-weight: 500; letter-spacing: -0.01em; color: #F4F1EA; }
+.dp-about { margin: 0 0 14px; max-width: 760px; font-size: 14px; line-height: 1.6; color: rgba(255,255,255,0.72); }
+.dp-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 22px; margin: 0; }
+.dp-meta dt { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.4); }
+.dp-meta dd { margin: 3px 0 0; font-size: 13px; color: rgba(255,255,255,0.86); }
+.dp-role { margin-bottom: 26px; }
+.dp-role-h { margin: 0 0 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #8C93A3; }
+.dp-role-h span { font-weight: 400; letter-spacing: 0.04em; text-transform: none; color: rgba(255,255,255,0.4); }
+.dp-soon { margin: 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 13px; color: rgba(255,255,255,0.35); }
 .page-foot { margin-top: clamp(48px, calc(var(--ui-h) * 0.08), 80px); padding-top: 18px; border-top: 1px solid rgba(255,255,255,0.08); }
 .page-foot p { font-size: 13px; line-height: 1.7; color: #8C93A3; max-width: 720px; margin: 0 0 14px; }
 /* About: team and logos */
@@ -1071,7 +1264,7 @@ body.sandbox .kepler-gl .map-control { top: calc(8px + var(--topbar-h) * var(--u
 .tc-expand:hover { color: var(--ink); background: rgba(255,255,255,0.08); }
 /* it sits above the variable cards, between the Focus column and the right edge */
 body.time-expanded .kepler-gl > div:has(> .bottom-widget--container) {
-  bottom: calc((var(--floor) + var(--card-h) + 12px) * var(--ui-zoom)) !important;
+  bottom: calc((var(--floor) + var(--card-h) + var(--ruler-h) + 12px) * var(--ui-zoom)) !important;
   left: calc((var(--inset) + var(--frost-w) - var(--gap) + 8px) * var(--ui-zoom)) !important; right: calc(var(--gap) * var(--ui-zoom)) !important;
   width: auto !important; z-index: 10; }   /* over the names and dashed lines (z 9), under our panels */
 body.time-expanded .bottom-widget--container { width: 100% !important; padding: 0 !important; }
@@ -1085,7 +1278,7 @@ body.time-expanded .bottom-widget__field::after { content: 'Timeline · 2024'; f
 /* the distance scale and zoom level (MapScale.tsx), with the hex grid: above the variable
    cards beside the Focus column, never in the pointer's way */
 .map-scale { position: absolute; z-index: 4; pointer-events: none; display: flex; align-items: flex-end; gap: 8px;
-  left: calc(var(--inset) + var(--frost-w) - var(--gap) + 14px); bottom: calc(var(--floor) + var(--card-h) + 14px); }
+  left: calc(var(--inset) + var(--frost-w) - var(--gap) + 14px); bottom: calc(var(--floor) + var(--card-h) + var(--ruler-h) + 14px); }
 .ms-zoom { height: 16px; padding: 0 7px; border-radius: 999px; background: rgba(16, 19, 24, 0.45); color: var(--ink-3);
   font-size: 10px; line-height: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ms-bar { box-sizing: border-box; height: 16px; padding: 0 5px; border: 1px solid rgba(236, 240, 246, 0.55); border-top: 0;

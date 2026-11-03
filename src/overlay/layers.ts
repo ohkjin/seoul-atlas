@@ -1,7 +1,9 @@
 import {addLayer, interactionConfigChange, layerConfigChange, layerVisConfigChange, layerVisualChannelConfigChange,
   removeDataset, reorderLayer, toggleLayerForMap, toggleSidePanel, toggleSplitMap} from '@kepler.gl/actions';
-import {VAR_BY_KEY, cellConfigFor, cellIdOf, columnConfigFor, columnIdOf, isTemporal, layerConfigFor, layerIdOf, varOfLayerId,
+import {VAR_BY_KEY, aggIdOf, cellConfigFor, cellIdOf, columnConfigFor, columnIdOf, isTemporal, layerConfigFor, layerIdOf, varOfLayerId,
   type Variable} from '../data/catalog';
+import {aggDataIdOf, aggregateConfigFor, type ShowAs} from './timeModes';
+import {pointIdOf, pointLayerConfig, pointsOf} from './stations';
 import type {UhusData} from '../data/uhus';
 import {OUTLINE_LAYER_ID} from './outline';
 import {PAIR_FIELD, addPair, pairStyleOf, rememberPairStyle, cellMixedIdOf, cellPairConfig, cellPairIdOf, columnPairIdOf, dailyRaisedCellsConfig, dailyColumnPairConfig, dailyPairConfig, dailyRaisedPairConfig, isPairDataId, pairColourChannel, pairDataIdOf, pairIdOf, pairKeysOf,
@@ -35,7 +37,7 @@ type GetVisState = () => any;
 
 export const dataIdFor = (x: Variable, grain: Grain) =>
   x.dataset === 'dong' ? grain : x.dataset === 'dong_daily' ? (grain === 'dong' ? 'dong_daily' : 'gu_daily') : x.dataset;
-export const isDailyDataId = (id: string) => id === 'gu_daily' || id === 'dong_daily';
+export const isDailyDataId = (id: string) => id === 'gu_daily' || id === 'dong_daily' || id === 'pts_daily';
 
 // One entry per variable drawn on the map right now — kepler's visibility, which its own
 // settings panel may change. A pair layer (bi:A:B) carries two variables, so it appears
@@ -77,6 +79,15 @@ export type Plan = {layers: string[]; pairable: boolean; areaPair?: [Variable, V
 // planFor in the same render agrees.
 let cellView = false;
 export const setCellView = (on: boolean) => { cellView = on; };
+// The time card's Aggregate tab (timeModes.ts): a daily variable drawn alone (or side by side) is its
+// period combined per place, on the areas (g:key). A linked pair keeps its day-by-day grid. Set by
+// Overlay during its render, like cellView.
+let aggregateView = false;
+export const setAggregateView = (on: boolean) => { aggregateView = on; };
+// Show as (timeModes.ts): data with points (stations, stops, docks) drawn as them (p:key, stations.ts)
+// rather than by dong. Set by Overlay during its render too.
+let pointsShow: ShowAs = 'all';
+export const setPointsShow = (show: ShowAs) => { pointsShow = show; };
 export function planFor(selection: string[], linked: boolean, grain: Grain, is3d = false): Plan {
   const vars = selection.map((k) => VAR_BY_KEY[k]).filter(Boolean);
   const [a, b] = vars;
@@ -84,8 +95,9 @@ export function planFor(selection: string[], linked: boolean, grain: Grain, is3d
   const sameKind = two && isTemporal(a) === isTemporal(b);
   const pairable = two && (!sameKind || dataIdFor(a, grain) === dataIdFor(b, grain));
   const cells = is3d && cellView;
-  const single = (x: Variable) => (!is3d ? layerIdOf(x.key) : isTemporal(x) ? columnIdOf(x.key)
-    : cells ? cellIdOf(x.key) : layerIdOf(x.key));
+  const single = (x: Variable) => (pointsOf(x.key) && pointsShow !== 'dong' ? pointIdOf(x.key)
+    : aggregateView && isTemporal(x) ? aggIdOf(x.key) : !is3d ? layerIdOf(x.key)
+    : isTemporal(x) ? columnIdOf(x.key) : cells ? cellIdOf(x.key) : layerIdOf(x.key));
   if (pairable && linked) {
     if (!isTemporal(a) && !isTemporal(b)) {
       return cells ? {layers: [cellPairIdOf(a.key, b.key)], pairable, cellPair: [a, b]}
@@ -104,11 +116,11 @@ export function planFor(selection: string[], linked: boolean, grain: Grain, is3d
 // The same variable's layer in the other mode: points ↔ columns. A pair's twin may hold
 // its two keys the other way round (the raised static × daily pair puts the daily first),
 // so both orders are given.
-// (a variable: v: / c: / h:; a pair: bi: / bc: / hb: / hc:, its keys either way round)
+// (a variable: v: / c: / h: / g:; a pair: bi: / bc: / hb: / hc:, its keys either way round)
 const twinsOf = (id: string): string[] => {
   const prefix = id.slice(0, id.indexOf(':') + 1);
-  if (['v:', 'c:', 'h:'].includes(prefix)) {
-    return ['v:', 'c:', 'h:'].filter((p) => p !== prefix).map((p) => `${p}${id.slice(2)}`);
+  if (['v:', 'c:', 'h:', 'g:', 'p:'].includes(prefix)) {
+    return ['v:', 'c:', 'h:', 'g:', 'p:'].filter((p) => p !== prefix).map((p) => `${p}${id.slice(2)}`);
   }
   const keys = pairKeysOf(id);
   if (!keys) return [];
@@ -131,7 +143,7 @@ export function selectionEntries(visState: any, selection: string[], linked: boo
     : {layer: find(plan.layers[i]), variable: VAR_BY_KEY[k]});
 }
 
-export const isOurs = (id: string) => ['v:', 'c:', 'h:', 'bi:', 'bc:', 'hb:', 'hc:'].some((p) => id.startsWith(p));
+export const isOurs = (id: string) => ['v:', 'c:', 'h:', 'g:', 'p:', 'bi:', 'bc:', 'hb:', 'hc:'].some((p) => id.startsWith(p));
 
 // Draws the selection: the planned layers on, every other layer of ours off and out of
 // kepler's layer list. Runs only when the selection, the link, the grain or the data
@@ -186,9 +198,12 @@ export function drawSelection(dispatch: Dispatch, get: GetVisState,
     const existing = find(vs, id);
     const x = varOfLayerId(id);
     if (x) {
-      const dataId = id.startsWith('h:') ? `${grain}_cells` : dataIdFor(x, grain);
-      if (!vs.datasets[dataId]) continue;
-      const cfg: any = id.startsWith('c:') ? columnConfigFor(x, dataId) : id.startsWith('h:') ? cellConfigFor(x, dataId)
+      // (an aggregate sits on the areas, coloured from the daily rows: those must be loaded too)
+      const dataId = id.startsWith('h:') ? `${grain}_cells` : id.startsWith('g:') ? aggDataIdOf(grain)
+        : id.startsWith('p:') ? (aggregateView ? 'pts_sized' : 'pts_daily') : dataIdFor(x, grain);
+      if (!vs.datasets[dataId] || (id.startsWith('g:') && !vs.datasets[dataIdFor(x, grain)])) continue;
+      const cfg: any = id.startsWith('p:') ? pointLayerConfig(x, dataId) : id.startsWith('g:') ? aggregateConfigFor(x, dataId)
+        : id.startsWith('c:') ? columnConfigFor(x, dataId) : id.startsWith('h:') ? cellConfigFor(x, dataId)
         : {...layerConfigFor(x), config: {...layerConfigFor(x).config, dataId}};
       if (!existing) dispatch(addLayer(cfg, dataId));
       else if (existing.config.dataId !== dataId) dispatch(layerConfigChange(existing, {dataId}));
@@ -350,12 +365,13 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
   // (only fields the dataset has: the daily pair's grid sits on the areas, which do not)
   const varsIn = (dataId: string) => on.filter((x) => x.layer.config.dataId === dataId
     && visState.datasets?.[dataId]?.fields.some((d: any) => d.name === x.variable.key)).map((x) => f(x.variable.key));
-  const names = (dataId: string) => [f('gu_name'), ...(dataId.startsWith('dong') ? [f('dong_name')] : []),
+  const names = (dataId: string) => [...(dataId.startsWith('pts') ? [f('name')] : [f('gu_name')]), ...(dataId.startsWith('dong') ? [f('dong_name')] : []),
     ...(isDailyDataId(dataId) ? [f('date')] : [])];
   const next: Record<string, any[]> = {};
   const pairIds = on.map((x) => x.layer.config.dataId).filter(isPairDataId);
   const current = tooltip.config?.fieldsToShow || {};
   const ids = ['dong', 'gu', 'gu_daily', ...(visState.datasets?.dong_daily ? ['dong_daily'] : []), ...new Set(pairIds),
+    ...['pts_daily', 'pts_sized', 'dong_agg', 'gu_agg'].filter((d) => visState.datasets?.[d]),
     ...['dong_cells', 'gu_cells'].filter((d) => visState.datasets?.[d])];
   for (const id of ids) {
     // a pair's tooltip also names its class, e.g. "RHSI high · Elderly low"

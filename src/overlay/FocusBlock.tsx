@@ -1,6 +1,6 @@
 import {Fragment, useLayoutEffect, useMemo, useRef, useState} from 'react';
 import {useDispatch} from 'react-redux';
-import {Filter, Link2, Settings, Unlink2} from 'lucide-react';
+import {ArrowUpDown, Filter, Link2, Settings, Unlink2, X} from 'lucide-react';
 import {THEMES, VAR_BY_KEY, isTemporal, type Variable} from '../data/catalog';
 import {displayNameOf, type Place, type UhusData} from '../data/uhus';
 import type {Focus} from './Overlay';
@@ -8,6 +8,7 @@ import {useCamera, useVisState} from './useKepler';
 import {extentOf, fmt, focusValue, histogramOf, type Scope} from './focusValues';
 import {dataIdFor, openMapSettings, selectionEntries, type Grain} from './layers';
 import {BIVARIATE, PAIR_FIELD, cellOf, isBivariateLayer, isDailyBivariate} from './pair';
+import {aggregateAt, legendOf} from './timeModes';
 import InfoTip from './InfoTip';
 import PlaceSentence from './PlaceSentence';
 import RangeFilter from './RangeFilter';
@@ -96,22 +97,27 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
           // Colour by another column, picked in kepler's settings: the card shows that one —
           // what the map shows — named, valued and ranged as it is.
           const cf: string | undefined = !pairPart ? layer.config.colorField?.name : undefined;
-          const recoloured = !!cf && cf !== sel.key && !!dataset?.fields.some((f: any) => f.name === cf);
+          // (coloured by place code: the time card's vs Avg or Aggregate colours, timeModes.ts — still this variable)
+          const ours = legendOf(layer.id);
+          const recoloured = !!cf && cf !== sel.key && !ours && !!dataset?.fields.some((f: any) => f.name === cf);
           const x: Variable = recoloured ? (VAR_BY_KEY[cf!] ?? {...sel, key: cf!, short: displayNameOf(cf!), full: displayNameOf(cf!), unit: '', how: 'mean'}) : sel;
           // the daily pair's grid and raised areas sit on the areas; its values live in the daily rows
-          const onLayer = dataset?.fields.some((f: any) => f.name === x.key);
+          // (station circles carry only the sized stations: a place's value comes from its daily rows)
+          const onLayer = !layer.id.startsWith('p:') && dataset?.fields.some((f: any) => f.name === x.key);
           const areas = visState.datasets[grain];
           const source = recoloured ? (cells && areas?.fields.some((f: any) => f.name === x.key) ? areas : dataset)
             : !onLayer && isTemporal(x) ? visState.datasets[dataIdFor(x, grain)]
             : cells ? visState.datasets[isTemporal(x) ? dataIdFor(x, grain) : grain] : dataset;
-          const value = focusValue(source, x.key, focus, x.how, visState.filters);
+          const value = layer.id.startsWith('g:') || layer.config.dataId === 'pts_sized' ? aggregateAt(layer.id, focus) : focusValue(source, x.key, focus, x.how, visState.filters);
           const extent = extentOf(source, x.key);
-          const colors: string[] = layer.config.visConfig?.colorRange?.colors || [];
+          // (a colour map of ours carries one more colour, for no data: not part of the legend)
+          const colors: string[] = ours?.colors ?? layer.config.visConfig?.colorRange?.colors ?? [];
           // A pair of variables shares one layer. In 2D each keeps its own axis of the
           // colour grid (A up the rows, B along the columns); in 3D A is colour, B height.
           const bivariate = !!pairPart && isBivariateLayer(layer);
           // B of a pair: the height of raised areas, or the size of daily points
-          const size = pairPart === 'b' && layer.type === 'point';
+          // station circles in one teal (Actual): their legend is their size
+          const size = (pairPart === 'b' && layer.type === 'point') || (layer.id.startsWith('p:') && !ours?.colors.length);
           const height = pairPart === 'b' && !bivariate && !size;
           const grid = bivariate ? gridOf(layer) : BIVARIATE;
           const axis = bivariate ? (pairPart === 'a' ? grid.map((row) => row[0]) : grid[0]) : null;
@@ -130,12 +136,26 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
           return (
             <Fragment key={`${layer.id}:${x.key}`}>
             {/* between two neighbourhood cards: one shared map, or two maps side by side */}
-            {i === 1 && pairable && (
-              <button className={`link-btn${linked ? ' on' : ''}`} onClick={onLink} aria-pressed={linked}
-                title={linked ? 'Show them side by side, each with its own settings' : 'Combine them into one map'}>
-                {linked ? <Link2 size={15} strokeWidth={1.75} /> : <Unlink2 size={15} strokeWidth={1.75} />}
-                <span>{linked ? 'Linked · one map' : 'Side by side'}</span>
-              </button>
+            {/* between the two cards, on a thin rule: one shared map or two side by side at its left
+                end, and ⇅ to swap them in its middle */}
+            {i === 1 && (
+              <div className="lc-between">
+                <span className="lc-left">{pairable && (
+                  <button className={`link-btn${linked ? ' on' : ''}`} onClick={onLink} aria-pressed={linked}
+                    title={linked ? 'Show them side by side, each with its own settings' : 'Combine them into one map'}>
+                    {linked ? <Link2 size={15} strokeWidth={1.75} /> : <Unlink2 size={15} strokeWidth={1.75} />}
+                    {/* narrow: the short word only (styles.css .lc-between) */}
+                    <span>{linked ? 'Linked' : 'Side by side'}<span className="lb-more">{linked ? ' · one map' : ''}</span></span>
+                  </button>
+                )}<i className="lc-rule" /></span>
+                {selection.length === 2 && (
+                  <button className="link-btn lc-swap" onClick={() => onSelect(selection[1], 'main')}
+                    title="Swap them: the second becomes the main" aria-label="Swap the two variables">
+                    <ArrowUpDown size={14} strokeWidth={1.75} /><span>Swap</span>
+                  </button>
+                )}
+                <i className="lc-rule" />
+              </div>
             )}
             {/* hidden with the eye in kepler's panel: still selected, shown dimmed */}
             <article className={`layer-card${layer.config.isVisible ? '' : ' off'}`}
@@ -159,6 +179,13 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                   {x.long ?? x.short}
                 </button>
                 {VAR_BY_KEY[x.key] && <InfoTip x={x} />}
+                {/* ✕ takes this one off the map (the main's hands the map to the second); not the last one */}
+                {selection.length === 2 && (
+                  <button className="lc-drop" onClick={() => onSelect(sel.key, 'link')}
+                    title={`Take ${sel.short} off the map`} aria-label={`Take ${sel.short} off the map`}>
+                    <X size={13} strokeWidth={1.9} />
+                  </button>
+                )}
                 <button className={`lc-filter${ranges[x.key] ? ' on' : ''}${filterOpen[x.key] ? ' open' : ''}`}
                   title={ranges[x.key] ? 'Filtered — click to edit' : 'Filter places by this value'} aria-pressed={!!ranges[x.key]}
                   onClick={() => setFilterOpen((o) => ({...o, [x.key]: !o[x.key]}))}>
@@ -183,11 +210,14 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
                     ? <div className="legend-sizes" aria-hidden><i /><i /><i /><i /></div>
                     : <div className="legend-bar" style={{background: `linear-gradient(90deg, ${colors.join(', ')})`}} />}
                   <div className="legend-ends">
-                    <span>{fmt(extent[0])}</span>
-                    {/* how the circles carry this variable: its size, its colour, or both */}
+                    <span>{ours ? ours.ends[0] : fmt(extent[0])}</span>
+                    {/* how the circles carry this variable: its size, its colour, or both — or, coloured
+                        by the time card, against what (vs Seoul avg · same day, Sum, …) */}
                     {role && <span className="legend-size">{role}</span>}
-                    <span>{fmt(extent[1])}</span>
+                    <span>{ours ? ours.ends[1] : fmt(extent[1])}</span>
                   </div>
+                  {/* what the colours are against, on a line of its own (it ran into the ends' numbers) */}
+                  {ours?.note && <div className="legend-note">{ours.note}</div>}
                 </div>
               )}
               {extent && (filterOpen[x.key] || ranges[x.key]) && (
