@@ -1,5 +1,4 @@
 import {Fragment, useEffect, useRef, useState} from 'react';
-import {useDispatch} from 'react-redux';
 import {ChevronDown, ChevronRight, Link2, LoaderCircle, Lock, Map as MapIcon, X} from 'lucide-react';
 import {TIER_LABEL, coversPeriod, provenanceOf} from '../data/sources';
 import {PROJECTS, inProject, projectsOf} from '../data/projects';
@@ -41,7 +40,6 @@ type Props = {
 // map as the main — one for the whole drawer, never none — and 🔗 links it to that main; the
 // links show on a hovered row, and on every row once a main is picked, as the next thing to do.
 export default function Drawer({focus, grain, headline, setHeadline, selection, onSelect, loading, only, onOnly, period, onPeriod, day, bands}: Props) {
-  const dispatch = useDispatch();
   const visState = useVisState();
   const datasets = visState?.datasets || {};
   const filters = visState?.filters || [];

@@ -11,28 +11,33 @@ const GRAIN: Record<Variable['dataset'], string> = {
 const POP_W = 280;
 const TIERS: Tier[] = ['source', 'processed', 'research'];
 
-// ⓘ right after a variable's name. Hovering or focusing it opens a card beside the icon
-// saying what the variable is; moving off closes it — nothing to dismiss. The card is
-// drawn into <body>, so no scrolling list or panel edge can clip it, and it flips left or
-// up when the icon is near the right or bottom of the screen. A tap toggles it on touch.
-export default function InfoTip({x}: {x: Variable}) {
+// An ⓘ's opening: where its card goes, and what its button listens to. (ProjectTip too.)
+export function useTip(width: number) {
   const btn = useRef<HTMLButtonElement>(null);
   const [at, setAt] = useState<{left: number; top: number; up: boolean} | null>(null);
   const show = () => {
     const r = btn.current?.getBoundingClientRect();
     if (!r) return;
-    const z = uiZoom(), w = POP_W * z;
+    const z = uiZoom(), w = width * z;
     const right = r.right + 8 + w <= window.innerWidth - 12;
     const up = r.top > window.innerHeight / 2;
     setAt({left: (right ? r.right + 8 : r.left - 8 - w) / z, top: (up ? r.bottom : r.top) / z, up});
   };
   const hide = () => setAt(null);
+  return {at, trigger: {ref: btn, onMouseEnter: show, onMouseLeave: hide, onFocus: show, onBlur: hide,
+    onClick: (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); if (at) hide(); else show(); }}};
+}
+
+// ⓘ right after a variable's name. Hovering or focusing it opens a card beside the icon
+// saying what the variable is; moving off closes it — nothing to dismiss. The card is
+// drawn into <body>, so no scrolling list or panel edge can clip it, and it flips left or
+// up when the icon is near the right or bottom of the screen. A tap toggles it on touch.
+export default function InfoTip({x}: {x: Variable}) {
+  const {at, trigger} = useTip(POP_W);
   const prov = at ? provenanceOf(x.key) : null;
   return (
     <>
-      <button ref={btn} type="button" className="info-tip" aria-label={`About ${x.short}`}
-        onMouseEnter={show} onMouseLeave={hide} onFocus={show} onBlur={hide}
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (at) hide(); else show(); }}>
+      <button {...trigger} type="button" className="info-tip" aria-label={`About ${x.short}`}>
         <Info size={14} strokeWidth={1.75} />
       </button>
       {at && createPortal(
@@ -41,7 +46,7 @@ export default function InfoTip({x}: {x: Variable}) {
           {/* the steps it was built through, its own lit (sources.ts provenanceOf) */}
           {prov && (
             <div className="ip-ladder">
-              {(['source', 'processed', 'research'] as Tier[]).map((t, i) => (
+              {TIERS.map((t, i) => (
                 <div key={t} className={`ip-step${t === prov.tier ? ' here' : i < TIERS.indexOf(prov.tier) ? ' done' : ''}`}>
                   <b>{TIER_LABEL[t]}</b>{prov.ladder[i]}
                 </div>

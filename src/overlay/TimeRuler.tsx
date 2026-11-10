@@ -1,12 +1,11 @@
 import {useMemo, useRef, useState} from 'react';
 import {ChevronUp} from 'lucide-react';
-import {DATA_SPAN, asOfOf, coversPeriod, isDemoSpan, spanOf} from '../data/sources';
+import {DATA_SPAN, MON, asOfOf, coversPeriod, isDemoSpan, spanOf} from '../data/sources';
 import {useVisState} from './useKepler';
 import {numericColumn} from './focusValues';
 import {THEMES, VAR_BY_KEY, isTemporal, topVarsOf, type Variable} from '../data/catalog';
 
 const DAY = 86400000;
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const DAYS_SHOWN = 56;   // Days: about eight weeks around the pointer
 const MONTHS_DAYS = 457;   // Months: about fifteen months around it
 const REST = 'rgba(238, 242, 247, 0.5)';   // every variable not on the map, one grey
@@ -27,6 +26,12 @@ const addMonths = (t: number, n: number) => { const d = new Date(t); return Date
 // the nearest month start / midnight: where a dragged end lands
 const snapMonth = (t: number) => { const a = monthStart(t), b = addMonths(a, 1); return t - a < b - t ? a : b; };
 const snapDay = (t: number) => Math.round(t / DAY) * DAY;
+// a date n months on, the same day of the month where it has one
+const shiftMonths = (t: number, n: number) => {
+  const d = new Date(t), first = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1);
+  const days = (addMonths(first, 1) - first) / DAY;
+  return first + (Math.min(d.getUTCDate(), days) - 1) * DAY;
+};
 // Years shows every year the atlas has data for
 const ALL: Period = [Date.UTC(yearOf(DATA_SPAN[0]), 0, 1), Date.UTC(yearOf(DATA_SPAN[1]) + 1, 0, 1)];
 const clampView = (v0: number, len: number): Period => {
@@ -104,9 +109,6 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
   // one drag: an end, the whole period, a new period brushed on Years, or Days' axis panned
   const drag = (e: React.PointerEvent, what: 'start' | 'end' | 'move' | 'axis') => {
     e.stopPropagation();
-    const el = e.currentTarget as HTMLElement;
-    el.setPointerCapture(e.pointerId);
-    setDragging(true);
     const t0 = timeAt(e.clientX), p0 = period, view0 = view, x0 = e.clientX;
     const move = (ev: PointerEvent) => {
       const t = timeAt(ev.clientX);
@@ -116,11 +118,11 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
       else if (what === 'move') {
         // the period keeps its length: shifted by whole months on Years, whole days on Days
         if (zoom === 'years') {
-          const n = Math.round((t - t0) / (30.44 * DAY));
-          let a = addMonths(p0[0], n), b = addMonths(p0[1], n);
-          if (a < ALL[0]) { b = addMonths(b, Math.round((ALL[0] - a) / (30.44 * DAY))); a = ALL[0]; }
-          if (b > ALL[1]) { a = addMonths(a, -Math.round((b - ALL[1]) / (30.44 * DAY))); b = ALL[1]; }
-          onPeriod([a, b]);
+          let n = Math.round((t - t0) / (30.44 * DAY));
+          while (shiftMonths(p0[0], n) < ALL[0]) n++;
+          while (n > 0 && shiftMonths(p0[1], n) > ALL[1]) n--;
+          const a = shiftMonths(p0[0], n), b = shiftMonths(p0[1], n);
+          onPeriod([a, Math.max(b, a + DAY)]);   // (Jan 30 – 31 a month on is Feb 29 – 29)
         } else {
           const n = Math.round((t - t0) / DAY) * DAY;
           const k = Math.max(ALL[0] - p0[0], Math.min(ALL[1] - p0[1], n));
@@ -130,19 +132,26 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
         const r = track.current!.getBoundingClientRect();
         setView(clampView(view0[0] - ((ev.clientX - x0) / r.width) * (view0[1] - view0[0]), view0[1] - view0[0]));
       } else if (Math.abs(ev.clientX - x0) > 4) {
-        const a = snap(Math.min(t0, t)), b = snap(Math.max(t0, t));
-        onPeriod([Math.max(ALL[0], a), Math.min(ALL[1], Math.max(b, addMonths(a, 1)))]);
+        const a = Math.min(addMonths(ALL[1], -1), Math.max(ALL[0], snap(Math.min(t0, t))));
+        onPeriod([a, Math.min(ALL[1], Math.max(snap(Math.max(t0, t)), addMonths(a, 1)))]);
       }
     };
+    follow(e, move);
+  };
+  // A drag runs until the button is let go, on the track and the window: what was grabbed — an end, the
+  // period, the scrollbar — can leave the screen while it is dragged, and would take the drag with it.
+  const follow = (e: React.PointerEvent, move: (ev: PointerEvent) => void) => {
+    track.current!.setPointerCapture(e.pointerId);
+    setDragging(true);
     const up = () => {
-      el.removeEventListener('pointermove', move);
-      el.removeEventListener('pointerup', up);
-      el.removeEventListener('pointercancel', up);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setDragging(false);
     };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
-    el.addEventListener('pointercancel', up);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   const inside = (t: number) => t > period[0] && t < period[1];
@@ -255,13 +264,8 @@ export default function TimeRuler({period, onPeriod, day, bands, onMap, open, ex
     const el = e.currentTarget as HTMLElement, bar = (onThumb ? el.parentElement : el)!.getBoundingClientRect();
     const len = view[1] - view[0], whole = ALL[1] - ALL[0];
     if (!onThumb) setView(clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2, len));
-    el.setPointerCapture(e.pointerId);
-    setDragging(true);
     const x0 = e.clientX, start = onThumb ? view[0] : clampView(ALL[0] + ((e.clientX - bar.left) / bar.width) * whole - len / 2, len)[0];
-    const move = (ev: PointerEvent) => setView(clampView(start + ((ev.clientX - x0) / bar.width) * whole, len));
-    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); setDragging(false); };
-    el.addEventListener('pointermove', move);
-    el.addEventListener('pointerup', up);
+    follow(e, (ev) => setView(clampView(start + ((ev.clientX - x0) / bar.width) * whole, len)));
   };
   // the wheel: a step in (towards Days) or out (towards Years) a notch, around the pointer
   const wheel = (e: React.WheelEvent) => {

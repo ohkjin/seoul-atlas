@@ -2,7 +2,7 @@ import {useEffect, useMemo, useState} from 'react';
 import {VAR_BY_KEY, VARIABLES} from '../../data/catalog';
 import {dailyOver, isIndustry, loadIndustries} from '../../data/industries';
 import {fmt, seriesByDay} from '../focusValues';
-import {Year, useColumnWidth} from './SalesPanel';
+import {Year, mean, median, nameOf, useColumnWidth} from './SalesPanel';
 import type {DashCtx} from './Dashboard';
 
 // A public daily dataset — the subway, buses, bikes, the people present — over the time ruler's
@@ -17,9 +17,6 @@ const DAY = 86400000;
 const BIG = 190, SMALL = 44, GAP = 6;
 export const isDailyPublicKey = (key: string) => !!VAR_BY_KEY[key]?.file && !isIndustry(key);
 
-const nameOf = (key: string) => (VAR_BY_KEY[key]?.short ?? key).replace(/ \(daily\)$/, '');
-const mean = (v: number[]) => { const f = v.filter(Number.isFinite); return f.length ? f.reduce((a, b) => a + b, 0) / f.length : NaN; };
-const median = (v: number[]) => { const f = v.filter(Number.isFinite).sort((a, b) => a - b); return f.length ? f[f.length >> 1] : NaN; };
 const pct = (r: number) => (Number.isFinite(r) ? `${r >= 0 ? '+' : '−'}${Math.abs(r * 100).toFixed(0)}%` : '—');
 const tone = (r: number) => (!Number.isFinite(r) || Math.abs(r) < 0.005 ? '' : r < 0 ? 'fell' : 'rose');
 
@@ -45,11 +42,12 @@ export default function DailyPanel({ctx, dailyKey: key}: {ctx: DashCtx; dailyKey
   const keys = useMemo(() => [key, ...VARIABLES.filter((x) => x.theme === v?.theme && isDailyPublicKey(x.key) && x.key !== key).map((x) => x.key)],
     [key, v?.theme]);
   const [loads, setLoads] = useState(0);
+  const [loadedFor, setLoadedFor] = useState('');   // what `loads` last finished for
   // after Overlay's own effect has set the period's years (a parent's effects run after its
   // children's), so the years beyond 2024 load too
   useEffect(() => {
     let live = true;
-    const t = setTimeout(() => loadIndustries(keys).then(() => live && setLoads((n) => n + 1))
+    const t = setTimeout(() => loadIndustries(keys).then(() => { if (live) { setLoads((n) => n + 1); setLoadedFor(`${keys.join()}|${period[0]}|${period[1]}`); } })
       .catch((e) => console.error('daily data failed to load', e)));
     return () => { live = false; clearTimeout(t); };
   }, [keys.join(), period[0], period[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
@@ -115,7 +113,8 @@ export default function DailyPanel({ctx, dailyKey: key}: {ctx: DashCtx; dailyKey
   ), [own, flags, key, placeName, W]);
 
   if (!v) return null;
-  if (!own) return <p className="dash-empty">Loading {nameOf(key)}…</p>;
+  // (the subway has values only where a station is: 229 of the 422 neighbourhoods)
+  if (!own) return <p className="dash-empty">{loadedFor === `${keys.join()}|${period[0]}|${period[1]}` ? `No ${nameOf(key)} for ${placeName} in this period.` : `Loading ${nameOf(key)}…`}</p>;
   const X = (i: number) => (i / Math.max(1, n - 1)) * W;
   const today = Math.round((day * DAY - from) / DAY);
   const dateOf = (i: number) => new Date(from + i * DAY).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', year: n > 370 ? 'numeric' : undefined, timeZone: 'UTC'});

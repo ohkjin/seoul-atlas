@@ -1,10 +1,10 @@
-import {memo, useCallback, useRef} from 'react';
+import {memo, useCallback, useMemo, useRef} from 'react';
 import type {Variable} from '../data/catalog';
 import type {Place} from '../data/uhus';
 import type {Focus} from './Overlay';
 import {valuesByPlace} from './focusValues';
 import {dataIdFor, type Grain} from './layers';
-import {BIVARIATE, thirdsOf} from './pair';
+import {BIVARIATE, dailyColoursOf, isBivariateLayer, thirdsOf} from './pair';
 import {ourFilterId} from './ourFilters';
 
 // The scatter shared by the 2D graph card and the dashboard: one variable on one axis as
@@ -19,7 +19,12 @@ export type Box = {W: number; H: number; pad: {l: number; r: number; t: number; 
 export function placeSeries(datasets: any, vars: Variable[], grain: Grain, filters: any[]) {
   const keyField = grain === 'dong' ? 'dong_code' : 'gu_code';
   const series = vars.map((x) => valuesByPlace(datasets?.[x.dataset === 'dong' ? grain : dataIdFor(x, grain)], x.key, keyField, filters));
-  const narrowed = series.filter((_, i) => filters.some((f: any) => f.id === ourFilterId(vars[i].key)));
+  // (a range in Aggregate is on the period's table, not on the rows of the day: ourFilters.ts)
+  const aggTable = datasets?.[`${grain}_agg`];
+  const narrowed = vars.flatMap((x, i) => {
+    const f = filters.find((o: any) => o.id === ourFilterId(x.key));
+    return !f ? [] : [aggTable && (f.dataId || []).includes(aggTable.id) ? valuesByPlace(aggTable, x.key, keyField, filters) : series[i]];
+  });
   if (!narrowed.length) return series;
   return series.map((s) => new Map([...s].filter(([code]) => narrowed.every((n) => n.has(code)))));
 }
@@ -94,7 +99,7 @@ export function niceTicks(lo: number, hi: number, sqrt = false, count = 5): numb
 // The dot colours: the bivariate grid (thirds of each variable) when the map shows it,
 // else the map layer's own ramp over A's quantiles, else one neutral ink.
 export function colouring(series: Map<string, number>[], nVars: number, bivariate: boolean, ramp: string[] | null,
-  byCode: Map<string, string> | null = null) {
+  byCode: Map<string, string> | null = null, colourBy = 0) {
   // the daily pair's grid: the map's own colour of the day, place by place
   if (byCode && nVars === 2) return (code: string) => byCode.get(code) ?? 'var(--ink-3)';
   if (bivariate && nVars === 2) {
@@ -105,10 +110,11 @@ export function colouring(series: Map<string, number>[], nVars: number, bivariat
     };
   }
   if (ramp?.length) {
-    const vals = [...series[0].values()].sort((p, q) => p - q);
+    const by = series[colourBy] ?? series[0];
+    const vals = [...by.values()].sort((p, q) => p - q);
     const cuts = ramp.slice(1).map((_, i) => vals[Math.min(vals.length - 1, Math.floor(((i + 1) / ramp.length) * vals.length))]);
     return (code: string) => {
-      const v = series[0].get(code);
+      const v = by.get(code);
       if (v == null) return 'var(--ink-3)';
       let k = 0;
       while (k < cuts.length && v >= cuts[k]) k++;
@@ -116,6 +122,21 @@ export function colouring(series: Map<string, number>[], nVars: number, bivariat
     };
   }
   return () => 'var(--ink-2)';
+}
+
+// The map's colouring, so a dot and its place share a colour.
+export function useMapColours(series: Map<string, number>[], nVars: number, entries: {layer?: any; pairPart?: 'a' | 'b'}[]) {
+  const layer = entries[0]?.layer;
+  const bivariate = nVars === 2 && isBivariateLayer(layer);
+  // the daily pair's colours change with the day; the dots take them place by place
+  const byCode = dailyColoursOf(layer);
+  const codeKey = byCode ? [...byCode.values()].join() : '';
+  // (of a pair, the variable that colours the map: not always the first picked)
+  const colourBy = Math.max(0, entries.findIndex((e) => e.pairPart === 'a'));
+  const ramp: string[] | null = nVars === 1 || entries[0]?.pairPart ? layer?.config.visConfig?.colorRange?.colors ?? null : null;
+  const colourOf = useMemo(() => colouring(series, nVars, bivariate, ramp, byCode, colourBy),
+    [series, nVars, bivariate, ramp?.join(), codeKey, colourBy]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return {bivariate, colourOf};
 }
 
 // Spearman's rank correlation of the places both variables have — ranks, not values, as

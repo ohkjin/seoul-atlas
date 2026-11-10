@@ -3,7 +3,7 @@ import {X} from 'lucide-react';
 import {useDispatch, useSelector, useStore} from 'react-redux';
 import {cancelFlight, flyToBounds, flyToView} from './flyTo';
 import type {Bounds, Place, UhusData} from '../data/uhus';
-import {SEOUL_VIEW, INITIAL_ON_MAP} from '../data/mapConfig';
+import {SEOUL_VIEW, INITIAL_ON_MAP, dayWindow} from '../data/mapConfig';
 import {THEMES, VAR_BY_KEY, colorRangeFor, isTemporal, varOfLayerId, varsOf, type ThemeKey} from '../data/catalog';
 import {OPENING_YEAR, spanOf} from '../data/sources';
 import {loadDongDaily} from '../data/uhus';
@@ -145,7 +145,15 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // the period the time ruler picks (TimeRuler): playback runs inside it, the drawer dims what
   // has no data in it. It opens on the year the most daily variables cover (OPENING_YEAR, 2024),
   // though the ruler runs over every year the atlas has data for.
-  const [period, setPeriod] = useState<Period>(() => [Date.UTC(OPENING_YEAR, 0, 1), Date.UTC(OPENING_YEAR + 1, 0, 1)]);
+  const [periodNow, setPeriodNow] = useState<Period>(() => [Date.UTC(OPENING_YEAR, 0, 1), Date.UTC(OPENING_YEAR + 1, 0, 1)]);
+  // The ruler and the drawer's dimming follow a drag as it goes (periodNow); everything else — files,
+  // tables, charts, a million rows at the widest — takes the period once the hand rests, not every
+  // month it passes.
+  const [period, setPeriod] = useState<Period>(periodNow);
+  useEffect(() => {
+    const t = window.setTimeout(() => setPeriod(periodNow), 200);
+    return () => window.clearTimeout(t);
+  }, [periodNow[0], periodNow[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
   // A variable over many years (the subway) has rows on the daily tables for the years the period
   // touches beyond 2024: as the period moves, those years' files load and the tables are rebuilt
   // with them (and without the years it left).
@@ -281,7 +289,8 @@ export default function Overlay({data}: {data: UhusData | null}) {
   setPointsShow(timeShow.show);
   // Stations, stops and docks for the variable that has them (stations.ts): its tables built for the
   // Show as and the ruler's period, then put on the map; the faint specks follow.
-  const ptsKey = timeShow.show === 'dong' ? null : selection.find((k) => pointsOf(k)) ?? null;
+  // (a linked pair is drawn on its grid: no stations under it)
+  const ptsKey = timeShow.show === 'dong' || pairedNow ? null : selection.find((k) => pointsOf(k)) ?? null;
   const hasLayers = (visState?.layers?.length ?? 0) > 0;
   useEffect(() => {
     if (!ptsKey || !hasLayers || sandbox) return;
@@ -345,22 +354,6 @@ export default function Overlay({data}: {data: UhusData | null}) {
   // the daily pair's grid takes the colours of the playing day (see pair.ts)
   const timeValue = timeIdx >= 0 ? visState.filters[timeIdx].value?.[0] : null;
   const playDay = timeValue != null ? Math.ceil(timeValue / 86400000) : null;
-  // the day on the map stays inside the period: moved to its first day when the period leaves it
-  const timeDomain = timeIdx >= 0 ? visState.filters[timeIdx].domain as [number, number] | undefined : undefined;
-  // (a table rebuilt over a wider span of years can come back with the day emptied: put one back)
-  const timeWindow = timeIdx >= 0 ? visState.filters[timeIdx].value : null;
-  const windowOk = Array.isArray(timeWindow) && timeWindow.length === 2 && Number.isFinite(timeWindow[0]);
-  useEffect(() => {
-    if (timeIdx < 0 || !timeDomain) return;
-    const lo = Math.max(period[0], timeDomain[0]), hi = Math.min(period[1] - 86400000, timeDomain[1]);
-    if (!windowOk) {
-      const at = lo <= hi ? lo : timeDomain[0];
-      dispatch(setFilter(timeIdx, 'value', [at, at + 86400000 - 1]) as any);
-      return;
-    }
-    const day = Math.ceil(timeValue / 86400000) * 86400000;
-    if (lo <= hi && (day < lo || day > hi)) dispatch(setFilter(timeIdx, 'value', [lo, lo + 86400000 - 1]) as any);
-  }, [period[0], period[1], timeIdx, timeDomain?.[0], timeDomain?.[1], windowOk]);   // eslint-disable-line react-hooks/exhaustive-deps
   // the ruler's lines under its axis: the map's variables that have a span, each in its colour on
   // the map — the 3×3 grid's rose and teal for a pair on the flat map, else a hue of its own ramp
   const bands = useMemo(() => selection.flatMap((k, i) => {
@@ -376,7 +369,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (visState && dailyGrid && !sandbox) recolourDailyPair(dispatch, store.getState().keplerGl.map.visState, {period,
       basis: timeShow.value === 'avg' && timeShow.base === 'same' ? 'day' : 'period', combine: aggregateOn ? timeShow.combine : undefined});
   }, [playDay, dailyGrid, datasetKeys, sandbox, filtersKey(visState?.filters), timeShow.value, timeShow.base, timeShow.combine, aggregateOn,
-    period[0], period[1]]);   // eslint-disable-line react-hooks/exhaustive-deps
+    period[0], period[1], dailyRows]);   // eslint-disable-line react-hooks/exhaustive-deps
   // A single daily layer takes the time card's Value for the playing day; an aggregate its period's
   // combined values (timeModes.ts). Keyed on each layer's colour field too, so a layer drawn again
   // with kepler's own colouring is put back on ours.
@@ -395,7 +388,8 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (!vars.length || vars.some((x) => !vs.datasets[dataIdFor(x, grain)])) return;
     const columns = vars.map((x) => [x, combineByPlace(x, vs.datasets[dataIdFor(x, grain)], period, combineFor(x, timeShow.combine))] as [typeof x, Map<string, number>]);
     const id = aggDataIdOf(grain);
-    const input = [selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyFields, !!vs.datasets[id]].join('|');
+    // (the rows too: a period's years land after it changes)
+    const input = [selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyFields, dailyRows, !!vs.datasets[id]].join('|');
     if (input === aggBuilt.current) return;
     aggBuilt.current = input;
     const table = aggregateTable(grain === 'dong' ? (data.dong as any) : (data.gu as any), grain, columns);
@@ -403,7 +397,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
     if (vs.datasets[id]) dispatch(replaceDataInMap({datasetToReplaceId: id, datasetToUse: {info, data: table} as any,
       options: {keepExistingConfig: true, centerMap: false, autoCreateLayers: false}} as any) as any);
     else dispatch(addDataToMap({datasets: [{info, data: table}], options: {centerMap: false, keepExistingConfig: true, autoCreateLayers: false}} as any));
-  }, [aggregateOn, pairedNow, selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyLoaded, dailyFields, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aggregateOn, pairedNow, selectionKey, grain, timeShow.combine, timeShow.show, period[0], period[1], dailyLoaded, dailyFields, dailyRows, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   const ptsRows = POINT_DATA.map((id) => visState?.datasets?.[id]?.dataContainer?.numRows?.() ?? 0).join();
   useEffect(() => {
     if (visState && !sandbox) syncSpecks(dispatch, store.getState().keplerGl.map.visState, ptsKey, timeShow);
@@ -412,10 +406,10 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const avgScope: Scope = grain === 'dong' && focus.level !== 'seoul' ? {prefix: focus.gu.code, name: focus.gu.name} : SEOUL_SCOPE;
   useEffect(() => {
     if (visState && singleDaily && !sandbox) recolourTimeline(dispatch, store.getState().keplerGl.map.visState, timeShow, period, avgScope);
-  }, [playDay, singleDaily, datasetKeys, sandbox, timeShow.value, timeShow.base, period[0], period[1], avgScope.prefix]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playDay, singleDaily, datasetKeys, sandbox, timeShow.value, timeShow.base, period[0], period[1], avgScope.prefix, dailyRows]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (visState && aggregates && !sandbox) recolourAggregate(dispatch, store.getState().keplerGl.map.visState, timeShow, period, grain, avgScope);
-  }, [aggregates, datasetKeys, sandbox, timeShow.value, timeShow.combine, period[0], period[1], grain, avgScope.prefix]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aggregates, datasetKeys, sandbox, timeShow.value, timeShow.combine, period[0], period[1], grain, avgScope.prefix, dailyRows]);   // eslint-disable-line react-hooks/exhaustive-deps
   // (the store as of now: a pair dropped in this render's draw must not be restyled)
   useEffect(() => { if (visState && !sandbox) restylePair(dispatch, store.getState().keplerGl.map.visState, is3d); }, [is3d, pairLayerId, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -478,6 +472,18 @@ export default function Overlay({data}: {data: UhusData | null}) {
     setRanges((cur) => (Object.keys(cur).every((k) => selection.includes(k)) ? cur
       : Object.fromEntries(Object.entries(cur).filter(([k]) => selection.includes(k)))));
   }, [selectionKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // A daily variable's range is in the units of what the card shows, a day's value or the period's
+  // Sum, Mean…: another of those starts it over.
+  const rangeUnits = aggregateOn && !pairedNow ? timeShow.combine : '';
+  const rangeUnitsWas = useRef(rangeUnits);
+  useEffect(() => {
+    if (rangeUnitsWas.current === rangeUnits) return;
+    rangeUnitsWas.current = rangeUnits;
+    setRanges((cur) => {
+      const kept = Object.entries(cur).filter(([k]) => !VAR_BY_KEY[k] || !isTemporal(VAR_BY_KEY[k]));
+      return kept.length === Object.keys(cur).length ? cur : Object.fromEntries(kept);
+    });
+  }, [rangeUnits]);
   // a filter on a place's own value reaches the daily rows too: the value joins those tables
   // (joinStatic), and the filter then spans them (syncOurFilters rebuilds it for the new tables)
   useEffect(() => {
@@ -492,20 +498,37 @@ export default function Overlay({data}: {data: UhusData | null}) {
   const rangesKey = JSON.stringify(ranges);
   useEffect(() => {
     if (!ready || sandbox) return;
-    syncOurFilters(dispatch, () => store.getState().keplerGl.map.visState, ranges);
-  }, [ready, rangesKey, datasetKeys, sandbox]);   // eslint-disable-line react-hooks/exhaustive-deps
+    syncOurFilters(dispatch, () => store.getState().keplerGl.map.visState, ranges, aggregateOn && !pairedNow);
+  }, [ready, rangesKey, datasetKeys, sandbox, aggregateOn, pairedNow]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Time, larger: kepler's own playback widget — its chart with a chosen y-axis and plot
   // type, the window and its handles, speeds — in place of our time card. It is kepler's
   // filter view: 'enlarged' shows it; its own minify button gives the card back.
   // kepler opens a time filter enlarged whatever the saved config says, so the view alone
   // cannot tell: the card asks for it (timeBig), and the view is set back to minified otherwise.
   const [timeBig, setTimeBig] = useState(false);
+  const timeAutoY = useRef<string | null>(null);   // the chart's Y axis as this code last set it
   const timeView = timeIdx >= 0 ? visState.filters[timeIdx].view : null;
   useEffect(() => {
     if (timeIdx >= 0 && !timeBig && timeView === 'enlarged') dispatch(setFilterView(timeIdx, 'minified') as any);
     if (timeBig && timeView && timeView !== 'enlarged') setTimeBig(false);   // kepler's own minify button
   }, [timeIdx, timeView, timeBig]);   // eslint-disable-line react-hooks/exhaustive-deps
   const timeExpanded = timeBig && timeView === 'enlarged';
+  // The map holds one day, inside the period: moved to the period's first day when it leaves it. A
+  // table rebuilt over other years can come back with the day emptied, or widened to its whole span
+  // (kepler pulls an end outside the new domain to the domain's end); and a window widened in the
+  // larger timeline, which is kepler's to set, comes back to one day with the card. With no data in
+  // the period, it stays on a day that has some.
+  const timeDomain = timeIdx >= 0 ? visState.filters[timeIdx].domain as [number, number] | undefined : undefined;
+  const timeWindow = timeIdx >= 0 ? visState.filters[timeIdx].value : null;
+  useEffect(() => {
+    if (timeIdx < 0 || !timeDomain || timeBig) return;
+    const DAY = 86400000;
+    const lo = Math.max(period[0], timeDomain[0]), hi = Math.min(period[1] - DAY, timeDomain[1]);
+    const [a, b] = lo <= hi ? [lo, hi] : timeDomain;
+    const oneDay = Array.isArray(timeWindow) && timeWindow.length === 2 && Number.isFinite(timeWindow[0]) && timeWindow[1] - timeWindow[0] < DAY;
+    const day = oneDay ? Math.ceil(timeWindow[0] / DAY) * DAY : NaN;
+    if (!oneDay || day < a || day > b) dispatch(setFilter(timeIdx, 'value', dayWindow(a)) as any);
+  }, [period[0], period[1], timeIdx, timeDomain?.[0], timeDomain?.[1], timeWindow?.[0], timeWindow?.[1], timeBig]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { document.body.classList.toggle('time-expanded', timeExpanded && !sandbox); }, [timeExpanded, sandbox]);
   const expandTime = () => {
     setPlaying(false);
@@ -518,7 +541,9 @@ export default function Overlay({data}: {data: UhusData | null}) {
     const x = selection.map((key) => VAR_BY_KEY[key]).find((v) => v && isTemporal(v));
     const filter = visState.filters[timeIdx];
     const field = x && visState.datasets[filter.dataId[0]]?.fields.find((f: any) => f.name === x.key);
-    if (field && !filter.yAxis) {
+    // (and again for another variable, unless its Y-axis menu has chosen a field since)
+    if (field && (!filter.yAxis || filter.yAxis.name === timeAutoY.current)) {
+      timeAutoY.current = field.name;
       dispatch(setFilterPlot(timeIdx, {yAxis: field} as any) as any);
       dispatch(setFilterPlot(timeIdx, {plotType: {type: 'lineChart', interval: '1-day', aggregation: x!.how === 'sum' ? 'sum' : 'average',
         colorsByDataId: {gu_daily: '#e8a35c', dong_daily: '#7dbccc'}}} as any) as any);
@@ -592,7 +617,7 @@ export default function Overlay({data}: {data: UhusData | null}) {
       )}
       {ready && !sandbox && <Drawer focus={focus} grain={grain} headline={headline} setHeadline={setHeadline} selection={selection} onSelect={select}
         only={onlyProject} onOnly={setOnlyProject}
-        period={period} onPeriod={setPeriod} day={playDay != null ? playDay * 86400000 : null} bands={bands}
+        period={periodNow} onPeriod={setPeriodNow} day={playDay != null ? playDay * 86400000 : null} bands={bands}
         loading={Object.values(industryLoading).filter(Boolean) as string[]} />}
       {ready && dashboardOpen && !sandbox && (
         <Dashboard data={data!} focus={focus} selection={selection} linked={linked} grain={grain} is3d={is3d} playing={playing} only={onlyProject} period={period}
@@ -625,7 +650,7 @@ function pickedPlace(clicked: any, visState: any): {level: 'dong' | 'gu'; code: 
   if (!layerId || !(varOfLayerId(layerId) || pairKeysOf(layerId))) return null;
   // the deck layer carries kepler's layer id; kepler's layer knows which dataset it draws
   const dataId = visState?.layers?.find((l: any) => l.id === layerId)?.config.dataId;
-  const level = ({dong: 'dong', dong_pair: 'dong', dong_daily: 'dong', dong_cells: 'dong', gu: 'gu', gu_pair: 'gu', gu_cells: 'gu'} as Record<string, 'dong' | 'gu'>)[dataId] ?? null;
+  const level = ({dong: 'dong', dong_pair: 'dong', dong_daily: 'dong', dong_cells: 'dong', dong_agg: 'dong', gu: 'gu', gu_pair: 'gu', gu_cells: 'gu', gu_daily: 'gu', gu_agg: 'gu'} as Record<string, 'dong' | 'gu'>)[dataId] ?? null;
   const datasets = visState?.datasets;
   if (!level) return null;
   const key = level === 'dong' ? 'dong_code' : 'gu_code';

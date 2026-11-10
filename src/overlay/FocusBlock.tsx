@@ -60,7 +60,8 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
     setPicking(null);
     if (!slot || key === selection[slot === 'main' ? 0 : 1]) return;
     // the second picked as the main swaps them, and so does the main picked as the second
-    if (slot === 'link' && key === selection[0]) onSelect(selection[1], 'main');
+    // (with no second yet, the main picked as the second changes nothing)
+    if (slot === 'link' && key === selection[0]) { if (selection[1]) onSelect(selection[1], 'main'); }
     else onSelect(key, slot);
   };
   const anyFilter = Object.keys(ranges).length > 0 || Object.values(filterOpen).some(Boolean);
@@ -228,7 +229,8 @@ export default function FocusBlock({data, focus, onSeoul, onGu, onDong, grain, o
             </Fragment>
           );
         })}
-        {onMap.length === 0 && <p className="empty-note">Nothing on the map. Open the bar below and turn a variable on.</p>}
+        {/* (the selection is never empty: with no layer yet, its layer's table is on its way) */}
+        {onMap.length === 0 && <p className="empty-note">{VAR_BY_KEY[selection[0]] ? `Loading ${VAR_BY_KEY[selection[0]].short}…` : 'Nothing on the map. Open the bar below and turn a variable on.'}</p>}
         {selection.length === 1 && onMap.length > 0 && (
           <button className={`lc-compare${picking?.slot === 'link' ? ' open' : ''}`} onClick={openPicker('link')}>＋ Compare with…</button>
         )}

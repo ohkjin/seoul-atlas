@@ -2,7 +2,7 @@ import {useMemo, useState} from 'react';
 import {ChevronDown, ChevronRight} from 'lucide-react';
 import {SHAP_GROUPS, VAR_BY_KEY} from '../../data/catalog';
 import {niceTicks} from '../scatter';
-import {useColumnWidth} from './SalesPanel';
+import {mean, signed, useColumnWidth} from './SalesPanel';
 import type {DashCtx} from './Dashboard';
 
 // What drives RHSI, from the UHUS model's SHAP contributions — in two parts.
@@ -27,8 +27,6 @@ export function readDongs(datasets: any): Table | null {
   return {codes: read('dong_code').map(String), names: read('dong_name').map(String), gus: read('gu_code').map(String), col: num};
 }
 
-const mean = (v: number[]) => { const f = v.filter(Number.isFinite); return f.length ? f.reduce((a, b) => a + b, 0) / f.length : NaN; };
-const signed = (x: number, d = 3) => (Number.isFinite(x) ? `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}` : '—');
 const asPct = (x: number) => `≈ ${(Math.exp(x) - 1) * 100 >= 0 ? '+' : '−'}${Math.abs((Math.exp(x) - 1) * 100).toFixed(0)}%`;
 
 export default function ShapPanel({ctx}: {ctx: DashCtx}) {
@@ -65,6 +63,7 @@ function Waterfall({W, table, members, place, isGu}: {W: number; table: Table; m
     const names = kids.slice(0, 3).map((c) => VAR_BY_KEY[c.k]?.short ?? c.k).join(' · ');
     return {label: g.label, inputs: kids.length > 3 ? `${names} +${kids.length - 3}` : names, v: at(table.col(g.key)), top: kids[0]};
   }).filter((g) => Number.isFinite(g.v)).sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  if (!groups.length) return <p className="shap-sum">The model has no values for {place}, so there is no breakdown of its RHSI.</p>;
   const big = groups.filter((g) => Math.abs(g.v) >= FOLD), small = groups.filter((g) => Math.abs(g.v) < FOLD);
   const steps = [...big, ...(small.length ? [{label: `Other ${small.length}`, inputs: small.map((g) => g.label).join(' · '),
     v: small.reduce((a, g) => a + g.v, 0), top: null}] : [])];

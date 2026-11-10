@@ -1,6 +1,6 @@
 import {useMemo, useState} from 'react';
 import {SALES_GROUP_KEYS, VAR_BY_KEY} from '../../data/catalog';
-import {fmt, focusValue, seriesByDay} from '../focusValues';
+import {STUDY_YEAR, fmt, focusValue, seriesByDay} from '../focusValues';
 import {niceTicks, scaleOf} from '../scatter';
 import type {DashCtx} from './Dashboard';
 
@@ -34,10 +34,10 @@ export default function HeatResponse({ctx}: {ctx: DashCtx}) {
   const placeName = focus.level === 'seoul' ? 'Seoul' : byDong ? (focus as any).dong.name : focus.gu.name;
 
   const model = useMemo(() => {
-    const t = seriesByDay(dataset, 'apptemp_max', key, code, 'mean');
-    const s = seriesByDay(dataset, salesKey, key, code, 'sum');
-    const p = seriesByDay(dataset, 'precip_sum', key, code, 'mean');
-    const fh = seriesByDay(dataset, 'is_hot', key, code, 'mean'), fm = seriesByDay(dataset, 'is_mild', key, code, 'mean');
+    const t = seriesByDay(dataset, 'apptemp_max', key, code, 'mean', STUDY_YEAR);
+    const s = seriesByDay(dataset, salesKey, key, code, 'sum', STUDY_YEAR);
+    const p = seriesByDay(dataset, 'precip_sum', key, code, 'mean', STUDY_YEAR);
+    const fh = seriesByDay(dataset, 'is_hot', key, code, 'mean', STUDY_YEAR), fm = seriesByDay(dataset, 'is_mild', key, code, 'mean', STUDY_YEAR);
     if (!t || !s || !p) return null;
     const days = t.vals.map((x, i) => {
       const date = new Date(t.start + i * DAY).toISOString().slice(0, 10);

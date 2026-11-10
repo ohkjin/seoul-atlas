@@ -8,10 +8,10 @@ import {dataIdFor, type Grain} from './layers';
 import {fmt, numericColumn, rowFilter} from './focusValues';
 import {filtersKey} from './ourFilters';
 import {BIVARIATE} from './pair';
+import {dayWindow} from '../data/mapConfig';
 import {Maximize2} from 'lucide-react';
 import type {Period} from './TimeRuler';
 import {COMBINE_LABEL, aggregateFor, canSum, combineFor, type Combine, type TimeView} from './timeModes';
-import {aggIdOf} from '../data/catalog';
 import {pointIdOf, pointsOf, sizeLegendOf} from './stations';
 import type {ShowAs} from './timeModes';
 
@@ -46,7 +46,9 @@ type Props = {focus: Focus; selection: string[]; linked: boolean; is3d: boolean;
   view: TimeView; onView: (v: TimeView) => void; aggregateOn: boolean; paired: boolean;
   scopeName: string};   // whose average vs Avg is against: Seoul, or the focused district
 const COMBINES: Combine[] = ['sum', 'mean', 'median', 'max', 'hotmild'];
-const fmtDay = (t: number) => new Date(t).toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'});
+const fmtDay = (t: number, year = false) => new Date(t).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: year ? 'numeric' : undefined, timeZone: 'UTC'});
+// the period in words, with its year or years: "Mar 1 – May 31, 2024", "Nov 1, 2023 – Feb 29, 2024"
+const fmtRange = (a: number, b: number) => `${fmtDay(a, new Date(a).getUTCFullYear() !== new Date(b).getUTCFullYear())} – ${fmtDay(b, true)}`;
 export default function TimeCard({focus, selection, linked, is3d, grain, playing, period, onPlaying, onExpand,
   view, onView, aggregateOn, paired, scopeName}: Props) {
   const dispatch = useDispatch();
@@ -66,6 +68,7 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
   const [lo, hi] = f?.domain ? [Math.max(period[0], f.domain[0]), Math.min(period[1] - DAY, f.domain[1])] : [0, -1];
   const span = useRef<[number, number]>([lo, hi]);
   span.current = [lo, hi];
+  const noData = lo > hi;   // the period lies outside the daily data
 
   const all = useMemo(() => variables.map((variable) => {
     const dataset = datasetOf(variable);
@@ -115,11 +118,12 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
       if (lo > hi) return;
       const day = Math.min(hi, Math.ceil(cur.value[0] / DAY) * DAY);
       const next = day + DAY > hi ? lo : day + DAY;   // loop back to the first day
-      dispatch(setFilter(idx, 'value', [next, next + DAY - 1]) as any);
+      dispatch(setFilter(idx, 'value', dayWindow(next)) as any);
     }, 1000 / (DAYS_PER_SECOND * speedNow));
     return () => window.clearInterval(t);
   }, [playing, idx, speedNow]);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => onPlaying(false), []);   // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (noData && playing) onPlaying(false); }, [noData, playing]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!f?.domain || !Number.isFinite(f?.value?.[0])) return null;
   const day = Math.min(hi, Math.ceil(f.value[0] / DAY) * DAY);   // the one midnight in the window
@@ -159,7 +163,7 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
     const r = el.getBoundingClientRect();
     const p = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
     const start = lo + Math.round((p * (hi - lo)) / DAY) * DAY;
-    dispatch(setFilter(idx, 'value', [start, start + DAY - 1]) as any);
+    dispatch(setFilter(idx, 'value', dayWindow(start)) as any);
   };
 
   // a year as a path between lo and hi (the foot of the chart for a day without a value)
@@ -217,7 +221,7 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
   const passText = places <= 1 ? (passing ? 'passes the filters' : 'filtered out')
     : `${passing} / ${places} ${focus.level === 'gu' ? `in ${focus.gu.name}` : 'places'} pass`;
   const playButton = (
-    <button className="icon-btn" onClick={() => onPlaying(!playing)}
+    <button className="icon-btn" onClick={() => onPlaying(!playing)} disabled={noData}
       aria-label={playing ? 'Pause' : 'Play'} title={playing ? 'Pause' : 'Play'}>
       {playing ? '❚❚' : '▶'}
     </button>
@@ -308,8 +312,8 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
         {tabs}
         <div className="tc-head">
           <div className="tc-date">
-            <span className="tc-day">{lo <= hi ? `${fmtDay(lo)} – ${fmtDay(hi)}` : '—'}</span>
-            <span className="tc-dow">{days} days · period from the ruler</span>
+            <span className="tc-day">{noData ? '—' : fmtRange(lo, hi)}</span>
+            <span className="tc-dow">{noData ? 'No data in this period' : `${days} days · period from the ruler`}</span>
           </div>
           <div className="tc-speed">
             <button className="tc-expand" onClick={onExpand} title="Larger timeline — chart, window and playback options"
@@ -343,8 +347,9 @@ export default function TimeCard({focus, selection, linked, is3d, grain, playing
       {tabs}
       <div className="tc-head">
         <div className="tc-date">
-          <span className="tc-day">{new Date(day).toISOString().slice(0, 10)}</span>
-          <span className="tc-dow">{new Date(day).toLocaleDateString('en-US', {weekday: 'long', timeZone: 'UTC'})}</span>
+          <span className="tc-day">{noData ? '—' : new Date(day).toISOString().slice(0, 10)}</span>
+          <span className="tc-dow">{noData ? `No data in this period · the map stays on ${new Date(f.value[0]).toISOString().slice(0, 10)}`
+            : new Date(day).toLocaleDateString('en-US', {weekday: 'long', timeZone: 'UTC'})}</span>
         </div>
         <div className="tc-speed" role="group" aria-label="Playback speed">
           {SPEEDS.map((s) => (

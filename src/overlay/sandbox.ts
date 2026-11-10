@@ -1,5 +1,6 @@
 import {layerConfigChange, removeFilter, setMapControlVisibility, toggleSidePanel} from '@kepler.gl/actions';
 import {addSyncedFilter, isOurFilterId} from './ourFilters';
+import {dayWindow} from '../data/mapConfig';
 import {hideLayer, isOurs} from './layers';
 import {OUTLINE_LAYER_ID} from './outline';
 
@@ -53,7 +54,7 @@ export function leaveSandbox(dispatch: Dispatch, get: GetVisState) {
   const after = get();
   if (!after.filters.some((f: any) => f.id === 'time')) {
     // the atlas's playback starts as a one-day window (mapConfig.ts)
-    addSyncedFilter(dispatch, get, 'time', ['gu_daily', 'dong_daily'], ['date', 'date'], [Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 2) - 1]);
+    addSyncedFilter(dispatch, get, 'time', ['gu_daily', 'dong_daily'], ['date', 'date'], dayWindow(Date.UTC(2024, 0, 1)));
   }
 }
 

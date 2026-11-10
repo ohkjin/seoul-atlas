@@ -1,0 +1,11 @@
+Seoul Atlas (kepler.gl)
+Copyright 2026 ohkjin
+
+The source code in this repository is licensed under the Apache License, Version 2.0
+(see LICENSE).
+
+Not covered by that licence:
+- the data in public/data/ (UHUS research data of the Seoul AI Foundation, and public
+  data from Seoul and Korean government sources). Each dataset keeps its source's own
+  terms of use; the app's Data page names the source of every variable.
+- the partner logos in public/logos/, which belong to their organisations.

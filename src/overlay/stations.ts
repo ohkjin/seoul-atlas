@@ -1,5 +1,6 @@
 import {addDataToMap, addLayer, layerConfigChange, replaceDataInMap} from '@kepler.gl/actions';
 import {VAR_BY_KEY, type Variable} from '../data/catalog';
+import {displayNameOf} from '../data/uhus';
 import {VALUE_COLOURS, combineFor, type Combine, type ShowAs, type TimeView} from './timeModes';
 import type {Period} from './TimeRuler';
 
@@ -32,10 +33,12 @@ const YEARS: Partial<Record<Kind, [number, number]>> = {subway: [2015, 2026]};
 const files = new Map<string, Promise<StationFile>>();
 const fetchFile = (path: string) => {
   if (!files.has(path)) {
-    files.set(path, fetch(`/data/opendata/${path}.json`).then((r) => {
+    const file = fetch(`/data/opendata/${path}.json`).then((r) => {
       if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
       return r.json();
-    }));
+    });
+    files.set(path, file);
+    file.catch(() => files.delete(path));   // a failed fetch is tried again next time
   }
   return files.get(path)!;
 };
@@ -76,11 +79,11 @@ export function sizedCount(file: StationFile, field: string, show: ShowAs, pct: 
 
 const DAY = 86400000;
 const dateOf = (day0: number, i: number) => `${new Date(day0 + i * DAY).toISOString().slice(0, 10)} 00:00:00`;
-const F = (name: string, type: string, analyzerType: string) => ({name, type, format: type === 'timestamp' ? 'YYYY-M-D H:m:s' : '', analyzerType});
+const F = (name: string, type: string, analyzerType: string) => ({name, type, format: type === 'timestamp' ? 'YYYY-M-D H:m:s' : '', analyzerType, displayName: displayNameOf(name)});
 const BASE = [F('sid', 'string', 'STRING'), F('name', 'string', 'STRING'), F('lat', 'real', 'FLOAT'), F('lng', 'real', 'FLOAT')];
 
 function combined(vals: (number | null)[], from: number, to: number, combine: Combine, x: Variable) {
-  const vs = vals.slice(from, to + 1).filter(Number.isFinite) as number[];
+  const vs = (to < from ? [] : vals.slice(from, to + 1)).filter(Number.isFinite) as number[];
   if (!vs.length) return null;
   const c = combineFor(x, combine);
   if (c === 'sum') return vs.reduce((a, b) => a + b, 0);
@@ -100,7 +103,7 @@ export function stationTables(file: StationFile, x: Variable, show: ShowAs, pct:
   const dailyRows: any[][] = [];
   const sizedRows: any[][] = [];
   const meanOf = (vals: (number | null)[], a: number, b: number) => {
-    const vs = vals.slice(a, b + 1).filter(Number.isFinite) as number[];
+    const vs = (b < a ? [] : vals.slice(a, b + 1)).filter(Number.isFinite) as number[];
     return vs.length ? vs.reduce((p, q) => p + q, 0) / vs.length : null;
   };
   for (let i = 0; i < n; i++) {
@@ -109,6 +112,12 @@ export function stationTables(file: StationFile, x: Variable, show: ShowAs, pct:
     const usual = meanOf(daily[i], from, to), year = meanOf(daily[i], 0, daily[i].length - 1);
     daily[i].forEach((v, d) => { if (d >= from && d <= to && v != null) dailyRows.push([s.sid, s.name, s.lat, s.lng, dateOf(day0, d), v, usual]); });
     sizedRows.push([s.sid, s.name, s.lat, s.lng, combined(daily[i], from, to, combine, x), usual, year]);
+  }
+  // No day in the period: one empty row dated inside the daily tables' own year, as an empty table
+  // would pull the time filter's range back to 1970
+  if (!dailyRows.length && file.stations.length) {
+    const s = file.stations[0];
+    dailyRows.push([s.sid, s.name, s.lat, s.lng, dateOf(Date.UTC(2024, 0, 1), 0), null, null]);
   }
   const allRows = file.stations.map((s) => [s.sid, s.name, s.lat, s.lng, s.total[field]]);
   const value = F(x.key, 'real', 'FLOAT');

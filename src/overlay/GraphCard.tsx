@@ -5,9 +5,8 @@ import type {Focus} from './Overlay';
 import {useVisState} from './useKepler';
 import {fmt} from './focusValues';
 import {selectionEntries, type Grain} from './layers';
-import {dailyColoursOf, isBivariateLayer} from './pair';
 import {filtersKey} from './ourFilters';
-import {Scatter, colouring, focusTest, layoutScatter, placeSeries, useStableCallback, type Box} from './scatter';
+import {Scatter, focusTest, layoutScatter, placeSeries, useMapColours, useStableCallback, type Box} from './scatter';
 
 type Props = {data: UhusData; focus: Focus; selection: string[]; linked: boolean; grain: Grain; is3d: boolean; playing: boolean;
   onPick: (level: 'dong' | 'gu', code: string) => void; onOpenDashboard: () => void};
@@ -40,19 +39,11 @@ export default function GraphCard({data, focus, selection, linked, grain, is3d, 
   const series = useMemo(() => placeSeries(datasets, vars, grain, filters),
     [selection.join(), grain, datasetKeys, day, filtersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  // the map's colouring, so a dot and its place share a colour
   const entries = visState ? selectionEntries(visState, selection, linked, grain, is3d) : [];
-  const layer = entries[0]?.layer;
-  const bivariate = vars.length === 2 && isBivariateLayer(layer);
-  // the daily pair's colours change with the day; the dots take them place by place
-  const byCode = dailyColoursOf(layer);
-  const codeKey = byCode ? [...byCode.values()].join() : '';
-  const ramp: string[] | null = vars.length === 1 || entries[0]?.pairPart ? layer?.config.visConfig?.colorRange?.colors ?? null : null;
+  const {bivariate, colourOf} = useMapColours(series, vars.length, entries);
 
   const plot = useMemo(() => layoutScatter(places, series, vars.length, box),
     [places, series, vars.length, grain]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const colourOf = useMemo(() => colouring(series, vars.length, bivariate, ramp, byCode),
-    [series, vars.length, bivariate, ramp?.join(), codeKey]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const shown = hover ?? focusTest(focus, grain).code;
   const shownPlace = shown ? places.find((p) => p.code === shown) : null;

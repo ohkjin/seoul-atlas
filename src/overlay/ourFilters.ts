@@ -9,7 +9,8 @@ type GetVisState = () => any;
 // every panel that reads values through the filters (focusValues), follow. Range filters
 // on numbers run on the GPU, so a filter costs nothing per playback step. The daily grid
 // on the areas has no daily column to filter; its recolouring leaves out the places the
-// filter removed (pair.ts).
+// filter removed (pair.ts). In Aggregate a daily variable's areas are its own table, each place's
+// combined value (timeModes.ts aggregateTable), and so is its range: the filter is on that table.
 export type Ranges = Record<string, [number, number]>;
 export const ourFilterId = (key: string) => `ours:${key}`;
 export const isOurFilterId = (id: string) => id.startsWith('ours:');
@@ -31,25 +32,29 @@ export function addSyncedFilter(dispatch: Dispatch, get: GetVisState, id: string
   if (value !== undefined) dispatch(setFilter(idx, 'value', value));
 }
 
-const datasetsWith = (vs: any, key: string) =>
-  DATASETS.filter((d) => vs.datasets[d]?.fields.some((f: any) => f.name === key));
+const AGG_DATASETS = ['dong_agg', 'gu_agg'];
+const datasetsWith = (vs: any, key: string, aggregate: boolean) => {
+  const has = (d: string) => vs.datasets[d]?.fields.some((f: any) => f.name === key);
+  const agg = aggregate ? AGG_DATASETS.filter(has) : [];
+  return agg.length ? agg : DATASETS.filter(has);
+};
 
 // Brings kepler's filters in line with the ranges: adds, moves, or drops `ours:` filters.
 // A filter whose datasets changed (a pair rebuilt, the daily rows arrived) is rebuilt.
-export function syncOurFilters(dispatch: Dispatch, get: GetVisState, ranges: Ranges) {
+export function syncOurFilters(dispatch: Dispatch, get: GetVisState, ranges: Ranges, aggregate = false) {
   const vs = get();
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
   for (let i = vs.filters.length - 1; i >= 0; i--) {
     const f = vs.filters[i];
     if (!isOurFilterId(f.id)) continue;
     const key = f.id.slice(5);
-    if (!ranges[key] || !same(f.dataId, datasetsWith(vs, key))) dispatch(removeFilter(i));
+    if (!ranges[key] || !same(f.dataId, datasetsWith(vs, key, aggregate))) dispatch(removeFilter(i));
   }
   for (const [key, range] of Object.entries(ranges)) {
     const now = get();
     const idx = now.filters.findIndex((f: any) => f.id === ourFilterId(key));
     if (idx < 0) {
-      const ids = datasetsWith(now, key);
+      const ids = datasetsWith(now, key, aggregate);
       if (ids.length) addSyncedFilter(dispatch, get, ourFilterId(key), ids, ids.map(() => key), range);
     } else {
       const v = now.filters[idx].value;

@@ -2,8 +2,7 @@ import {useMemo, useState} from 'react';
 import type {Variable} from '../../data/catalog';
 import type {Place} from '../../data/uhus';
 import {fmt} from '../focusValues';
-import {dailyColoursOf, isBivariateLayer} from '../pair';
-import {Scatter, colouring, focusTest, layoutScatter, niceTicks, spearman, useStableCallback, type Box} from '../scatter';
+import {Scatter, focusTest, layoutScatter, niceTicks, spearman, useMapColours, useStableCallback, type Box} from '../scatter';
 import type {DashCtx} from './Dashboard';
 
 // The 2D graph card's scatter, large, with numbers along both axes, and for two variables
@@ -15,16 +14,9 @@ export default function BigScatter({ctx}: {ctx: DashCtx}) {
   const [a, b] = vars;
   const box: Box = useMemo(() => ({W: 520, H: 280, pad: {l: 34, r: 6, t: 18, b: 26}, r: grain === 'dong' ? 3 : 6}), [grain]);
   const pick = useStableCallback(onPick);
-  const layer = entries[0]?.layer;
-  const bivariate = vars.length === 2 && isBivariateLayer(layer);
-  // the daily pair's colours change with the day; the dots take them place by place
-  const byCode = dailyColoursOf(layer);
-  const codeKey = byCode ? [...byCode.values()].join() : '';
-  const ramp: string[] | null = vars.length === 1 || entries[0]?.pairPart ? layer?.config.visConfig?.colorRange?.colors ?? null : null;
+  const {bivariate, colourOf} = useMapColours(series, vars.length, entries);
   const plot = useMemo(() => layoutScatter(places, series, vars.length, box),
     [places, series, vars.length, grain]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const colourOf = useMemo(() => colouring(series, vars.length, bivariate, ramp, byCode),
-    [series, vars.length, bivariate, ramp?.join(), codeKey]);   // eslint-disable-line react-hooks/exhaustive-deps
   const rho = useMemo(() => (b ? spearman(series[0], series[1]) : null), [series, b]);
 
   if (!a) return <p className="dash-empty">Link a variable to see how its places spread.</p>;

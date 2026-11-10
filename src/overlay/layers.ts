@@ -95,7 +95,8 @@ export function planFor(selection: string[], linked: boolean, grain: Grain, is3d
   const sameKind = two && isTemporal(a) === isTemporal(b);
   const pairable = two && (!sameKind || dataIdFor(a, grain) === dataIdFor(b, grain));
   const cells = is3d && cellView;
-  const single = (x: Variable) => (pointsOf(x.key) && pointsShow !== 'dong' ? pointIdOf(x.key)
+  // (the station tables hold one variable: a second with points, side by side, is drawn by dong)
+  const single = (x: Variable, i: number) => (pointsOf(x.key) && pointsShow !== 'dong' && !(i === 1 && pointsOf(a.key)) ? pointIdOf(x.key)
     : aggregateView && isTemporal(x) ? aggIdOf(x.key) : !is3d ? layerIdOf(x.key)
     : isTemporal(x) ? columnIdOf(x.key) : cells ? cellIdOf(x.key) : layerIdOf(x.key));
   if (pairable && linked) {
@@ -366,12 +367,13 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
   const varsIn = (dataId: string) => on.filter((x) => x.layer.config.dataId === dataId
     && visState.datasets?.[dataId]?.fields.some((d: any) => d.name === x.variable.key)).map((x) => f(x.variable.key));
   const names = (dataId: string) => [...(dataId.startsWith('pts') ? [f('name')] : [f('gu_name')]), ...(dataId.startsWith('dong') ? [f('dong_name')] : []),
-    ...(isDailyDataId(dataId) ? [f('date')] : [])];
-  const next: Record<string, any[]> = {};
-  const pairIds = on.map((x) => x.layer.config.dataId).filter(isPairDataId);
+    ...(isDailyDataId(dataId) ? [{name: 'date', format: 'YYYY-MM-DD'}] : [])];
   const current = tooltip.config?.fieldsToShow || {};
+  // (a table this does not write for keeps its list: kepler reads one for every table it can hover)
+  const next: Record<string, any[]> = Object.fromEntries(Object.entries(current).filter(([id]) => visState.datasets?.[id])) as Record<string, any[]>;
+  const pairIds = on.map((x) => x.layer.config.dataId).filter(isPairDataId);
   const ids = ['dong', 'gu', 'gu_daily', ...(visState.datasets?.dong_daily ? ['dong_daily'] : []), ...new Set(pairIds),
-    ...['pts_daily', 'pts_sized', 'dong_agg', 'gu_agg'].filter((d) => visState.datasets?.[d]),
+    ...['pts_daily', 'pts_sized', 'pts', 'dong_agg', 'gu_agg'].filter((d) => visState.datasets?.[d]),
     ...['dong_cells', 'gu_cells'].filter((d) => visState.datasets?.[d])];
   for (const id of ids) {
     // a pair's tooltip also names its class, e.g. "RHSI high · Elderly low"
@@ -389,7 +391,7 @@ export function syncTooltip(dispatch: Dispatch, visState: any) {
     // there; only variables that left the map drop out. A dataset this code has not
     // written for yet carries kepler's own first-five default instead — not kept.
     const had: any[] = current[id] || [];
-    const kept = required.map((r) => had.find((h) => h.name === r.name) ?? r);
+    const kept = required.map((r) => { const h = had.find((o) => o.name === r.name); return h && (h.format || !r.format) ? h : r; });
     const dc = visState.datasets[id]?.dataContainer;
     const extras = dc && tooltipWritten.has(dc)
       ? had.filter((h, i) => !required.some((r) => r.name === h.name) && !VAR_BY_KEY[h.name]

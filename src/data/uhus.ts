@@ -96,7 +96,9 @@ function keepAsReal<T extends {fields: any[]; rows: any[][]}>(data: T, names: st
 const COLUMN_NAMES: Record<string, string> = {
   gu_name: 'District', gu_code: 'District code', dong_name: 'Neighborhood', dong_code: 'Neighborhood code',
   date: 'Date', lat: 'Latitude', lng: 'Longitude', h3: 'H3 cell', _geojson: 'Geometry',
-  is_hot: 'Heat day', is_mild: 'Mild day'
+  is_hot: 'Heat day', is_mild: 'Mild day',
+  // stations, stops and docks (stations.ts)
+  sid: 'Station id', name: 'Name', usual: 'Usual day', year_usual: 'Usual day, over the year'
 };
 export const displayNameOf = (name: string) => VAR_BY_KEY[name]?.short ?? COLUMN_NAMES[name] ?? name;
 export function withDisplayNames<T extends {fields: any[]}>(table: T): T {

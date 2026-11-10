@@ -3,7 +3,7 @@ import {SHAP_GROUPS, VAR_BY_KEY, type Variable} from '../../data/catalog';
 import {fmt} from '../focusValues';
 import {niceTicks, scaleOf} from '../scatter';
 import {profileValue} from './MiniMaps';
-import {useColumnWidth} from './SalesPanel';
+import {mean, signed, useColumnWidth} from './SalesPanel';
 import {readDongs} from './ShapPanel';
 import type {DashCtx} from './Dashboard';
 
@@ -18,8 +18,6 @@ import type {DashCtx} from './Dashboard';
 const H = 250, PAD = {l: 46, r: 12, t: 18, b: 36}, GAP = 24;
 export const isInputKey = (key: string) => SHAP_GROUPS.some((g) => g.inputs.includes(key));
 
-const mean = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN);
-const signed = (x: number, d = 3) => (Number.isFinite(x) ? `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}` : '—');
 const lin = (d0: number, d1: number, r0: number, r1: number) => (v: number) => r0 + ((v - d0) / (d1 - d0 || 1)) * (r1 - r0);
 // an axis value as people read it: shares in %, a logged price in won, else the number
 export const tickOf = (v: Variable, x: number) => (v.unit === 'ratio' ? `${Math.round(x * 100)}%`
@@ -77,6 +75,8 @@ export default function EffectPanel({ctx, inputKey: key}: {ctx: DashCtx; inputKe
   if (!model) return <p className="dash-empty">No model values for {v.short}.</p>;
   const y = lin(model.ylo, model.yhi, H - PAD.b, PAD.t), at = (p: number) => PAD.l + p * (PW - PAD.l - PAD.r);
   const cx = (u: number) => at(model.sx.px(u));
+  // (a place the model has no value for has no dot of its own: no value for one of the two axes)
+  const drawn = members.filter((i) => Number.isFinite(model.xs[i]) && Number.isFinite(model.ss[i]));
   const here = members.length ? mean(members.map((i) => model.xs[i]).filter(Number.isFinite)) : NaN;
   const pushHere = members.length ? mean(members.map((i) => model.ss[i]).filter(Number.isFinite)) : NaN;
   const sorted = model.ids.map((i) => model.xs[i]).sort((a, b) => a - b);
@@ -112,9 +112,9 @@ export default function EffectPanel({ctx, inputKey: key}: {ctx: DashCtx; inputKe
               ))}
             </g>
             {dots}
-            {members.length > 1 && members.map((i) => <circle key={`m${i}`} className="fx-dot on" cx={cx(model.xs[i])} cy={y(model.ss[i])} r={2.8} />)}
+            {members.length > 1 && drawn.map((i) => <circle key={`m${i}`} className="fx-dot on" cx={cx(model.xs[i])} cy={y(model.ss[i])} r={2.8} />)}
             <polyline className="fx-mean" points={model.line.map(([a, b]) => `${at(a)},${y(b)}`).join(' ')} />
-            {members.length === 1 && <circle className="fx-ring" cx={cx(model.xs[members[0]])} cy={y(model.ss[members[0]])} r={5.5} />}
+            {members.length === 1 && drawn.length === 1 && <circle className="fx-ring" cx={cx(model.xs[drawn[0]])} cy={y(model.ss[drawn[0]])} r={5.5} />}
             <text className="gc-axis" x={PAD.l} y={PAD.t - 6}>↑ SHAP: its push on RHSI (log-ratio)</text>
             <text className="gc-axis" x={PW - PAD.r} y={H - 4} textAnchor="end">{v.short}{v.unit === 'ratio' ? '' : ` (${v.unit})`}{model.sx.sqrt ? ' (√ scale)' : ''} →</text>
           </svg>

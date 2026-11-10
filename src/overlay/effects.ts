@@ -47,7 +47,7 @@ function haloConfigOf(base: any) {
   const vc = c.visConfig;
   return {
     id: HALO_PREFIX + base.id, type: 'point',
-    config: {dataId: c.dataId, label: `${c.label} · halo`, columns: names(c.columns), isVisible: true, hidden: true,
+    config: {dataId: c.dataId, label: c.label, columns: names(c.columns), isVisible: true, hidden: true,
       colorField: c.colorField ? {name: c.colorField.name, type: c.colorField.type} : null, colorScale: c.colorScale,
       sizeField: c.sizeField ? {name: c.sizeField.name, type: c.sizeField.type} : null, sizeScale: c.sizeScale,
       visConfig: {...vc, opacity: 0.16, outline: false, filled: true, radius: (vc.radius ?? 20) * 3,

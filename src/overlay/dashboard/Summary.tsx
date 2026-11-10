@@ -34,7 +34,7 @@ export default function Summary({ctx}: {ctx: DashCtx}) {
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, tileVars, level, filters),
     [tileVars, level, datasetKeys, day, filtersKey(filters)]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const stats = useMemo(() => tileVars.map((x, i) => statsOf(series[i], code)), [series, code]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const stats = useMemo(() => tileVars.map((_, i) => statsOf(series[i], code)), [series, code]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const date = new Date(day * DAY);
   const dayLabel = date.toLocaleDateString('en-US', {month: 'short', day: 'numeric', timeZone: 'UTC'});

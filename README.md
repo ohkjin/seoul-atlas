@@ -100,3 +100,10 @@ repository, then:
 
 `__store` (the Redux store) and `__overlaps()` (lists every pair of overlapping panels).
 Both are stripped from production builds.
+
+## License
+
+The code is under the [Apache License 2.0](LICENSE), copyright 2026 ohkjin. That licence does not
+cover the data in `public/data/` or the partner logos in `public/logos/`: each dataset keeps its
+source's own terms (the Data page names every variable's source), and the logos belong to their
+organisations. See [NOTICE](NOTICE).

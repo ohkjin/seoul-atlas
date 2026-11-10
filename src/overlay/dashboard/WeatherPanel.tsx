@@ -1,8 +1,8 @@
 import {useMemo} from 'react';
 import {VAR_BY_KEY} from '../../data/catalog';
-import {numericColumn, seriesByDay} from '../focusValues';
+import {STUDY_YEAR, numericColumn, seriesByDay, yearOfDays} from '../focusValues';
 import {placeSeries} from '../scatter';
-import {Months, Year, useColumnWidth} from './SalesPanel';
+import {Months, Year, mean, median, nameOf, useColumnWidth} from './SalesPanel';
 import type {DashCtx} from './Dashboard';
 
 // Weather — the year, and the heat. When daily weather leads the selection, the wide panel
@@ -17,21 +17,17 @@ const BIG = 190, SMALL = 44, GAP = 6;
 export const WEATHER_KEYS = ['temp_max', 'apptemp_max', 'humid_max', 'precip_sum'];
 export const isWeatherKey = (key: string) => WEATHER_KEYS.includes(key);
 
-const nameOf = (key: string) => (VAR_BY_KEY[key]?.short ?? key).replace(/ \(daily\)$/, '');
 const unitOf = (key: string) => (VAR_BY_KEY[key]?.unit === '%' ? '%' : ` ${VAR_BY_KEY[key]?.unit ?? ''}`);
 const num = (key: string, v: number) => (Number.isFinite(v) ? v.toFixed(key === 'humid_max' ? 0 : 1) : '—');
-const mean = (v: number[]) => { const f = v.filter(Number.isFinite); return f.length ? f.reduce((a, b) => a + b, 0) / f.length : NaN; };
-const median = (v: number[]) => { const f = v.filter(Number.isFinite).sort((a, b) => a - b); return f.length ? f[f.length >> 1] : NaN; };
 
 // each day's median over every row of that day: Seoul's typical neighbourhood (or district)
 function medianByDay(dataset: any, field: string) {
   const f = dataset?.fields.find((x: any) => x.name === field), d = dataset?.fields.find((x: any) => x.name === 'date');
   if (!f || !d) return null;
   const v = numericColumn(dataset, f), t = numericColumn(dataset, d);
-  let lo = Infinity;
-  for (let r = 0; r < t.length; r++) if (t[r] < lo) lo = t[r];
+  const [lo, hi] = STUDY_YEAR;
   const days: number[][] = [];
-  for (let r = 0; r < v.length; r++) if (Number.isFinite(v[r])) (days[Math.round((t[r] - lo) / DAY)] ??= []).push(v[r]);
+  for (let r = 0; r < v.length; r++) if (Number.isFinite(v[r]) && t[r] >= lo && t[r] < hi) (days[Math.round((t[r] - lo) / DAY)] ??= []).push(v[r]);
   return Array.from(days, (xs) => (xs?.length ? median(xs) : NaN));
 }
 
@@ -54,12 +50,12 @@ export default function WeatherPanel({ctx, weatherKey: key}: {ctx: DashCtx; weat
 
   const model = useMemo(() => {
     if (!table) return null;
-    const hs = seriesByDay(table, 'is_hot', keyField, code, 'mean'), ms = seriesByDay(table, 'is_mild', keyField, code, 'mean');
+    const hs = seriesByDay(table, 'is_hot', keyField, code, 'mean', STUDY_YEAR), ms = seriesByDay(table, 'is_mild', keyField, code, 'mean', STUDY_YEAR);
     if (!hs || !ms) return null;
     const hot = hs.vals.map((v) => v >= 0.5), mild = ms.vals.map((v) => v >= 0.5);
     const onHot = (v: number[]) => mean(v.filter((_, i) => hot[i]));
     const rows = WEATHER_KEYS.map((k) => {
-      const vals = seriesByDay(table, k, keyField, code, 'mean')?.vals;
+      const vals = seriesByDay(table, k, keyField, code, 'mean', STUDY_YEAR)?.vals;
       if (!vals) return null;
       const s = seoul[k];
       return {key: k, vals, seoul: s, gap: s ? mean(vals.map((v, i) => v - s[i])) : NaN, hot: onHot(vals), seoulHot: s ? onHot(s) : NaN};
@@ -97,9 +93,10 @@ export default function WeatherPanel({ctx, weatherKey: key}: {ctx: DashCtx; weat
   const nHot = model.hot.filter(Boolean).length;
   const all = heatDays ? [...heatDays.values()] : [], mine = code ? heatDays?.get(code) : undefined;
   const rank = mine != null ? all.filter((v) => v > mine).length + 1 : null;
-  const dateOf = (i: number) => new Date(model.start + i * DAY).toLocaleDateString('en-GB', {day: 'numeric', month: 'short'});
+  const dateOf = (i: number) => new Date(model.start + i * DAY).toLocaleDateString('en-GB', {day: 'numeric', month: 'short', timeZone: 'UTC'});
   const temp = model.rows.find((r) => r.key === 'temp_max');
-  const hottest = temp ? temp.vals.reduce((b, v, i) => (v > temp.vals[b] ? i : b), 0) : -1;
+  const hottest = temp ? temp.vals.reduce((b, v, i) => (Number.isFinite(v) && !(v <= temp.vals[b]) ? i : b), 0) : -1;
+  const year = yearOfDays(model.start, own.vals.length);
   let run = 0, longest = [0, 0];
   model.hot.forEach((b, i) => { run = b ? run + 1 : 0; if (run > longest[0]) longest = [run, i]; });
   const smallH = model.rows.length * (SMALL + GAP) + 10;
@@ -107,14 +104,14 @@ export default function WeatherPanel({ctx, weatherKey: key}: {ctx: DashCtx; weat
     <div className="sales weather">
       <div className="sp-top">
         <div ref={measure}><svg viewBox={`0 0 ${W} ${BIG}`} width={W} height={BIG} className="sp-svg" role="img"
-          aria-label={`${nameOf(key)} every day of 2024, ${placeName}, heat days shaded`}>
+          aria-label={`${nameOf(key)} every day${year ? ` of ${year}` : ''}, ${placeName}, heat days shaded`}>
           {bigYear}
           {today >= 0 && today < own.vals.length && <line className="sp-today" x1={X(today)} x2={X(today)} y1={0} y2={BIG - 16} />}
           <Months W={W} y={BIG - 2} />
         </svg></div>
         <div className="sp-read">
           <div className="sp-big">{nHot}<span className="sp-big-unit"> heat days</span></div>
-          <p>in 2024, {level === 'seoul' ? 'Seoul — days when most of it was hot' : placeName}</p>
+          <p>{year ? `in ${year}, ` : ''}{level === 'seoul' ? 'Seoul — days when most of it was hot' : placeName}</p>
           {all.length > 0 && <p>a typical Seoul {grain === 'dong' ? 'neighborhood' : 'district'}: <b>{Math.round(median(all))}</b></p>}
           {rank != null && <p>#{rank} of {all.length} for heat days</p>}
           {temp && hottest >= 0 && (

@@ -7,6 +7,11 @@ export const SEOUL_VIEW = {latitude: 37.5665, longitude: 126.978, zoom: 10.4, pi
 // What is on the map when the page opens. Each one is also that theme's headline.
 export const INITIAL_ON_MAP = ['RHSI_retail', 'temp_max'];
 
+// The window the time filter holds for the day starting at midnight d. It ends at noon rather than a
+// millisecond before the next midnight: kepler filters on the GPU in float32, where that rounds onto the
+// next midnight on most days (324 of 2024's 366), and the next day's rows drew over this day's.
+export const dayWindow = (d: number): [number, number] => [d, d + 43200000];
+
 export const mapConfig = {
   version: 'v1',
   config: {
@@ -17,10 +22,10 @@ export const mapConfig = {
       // own widget stays mounted but hidden — it is the animation engine — and our
       // TimePill is the visible control.
       filters: [{id: 'time', dataId: ['gu_daily'], name: ['date'], type: 'timeRange', view: 'minified',
-        value: [Date.UTC(2024, 0, 1), Date.UTC(2024, 0, 2) - 1]}],
+        value: dayWindow(Date.UTC(2024, 0, 1))}],
       interactionConfig: {tooltip: {enabled: true, fieldsToShow: {
         dong: [{name: 'gu_name', format: null}, {name: 'dong_name', format: null}],
-        gu_daily: [{name: 'gu_name', format: null}, {name: 'date', format: null}]
+        gu_daily: [{name: 'gu_name', format: null}, {name: 'date', format: 'YYYY-MM-DD'}]
       }}}
     },
     mapState: SEOUL_VIEW,

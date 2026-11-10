@@ -16,7 +16,6 @@ const DAY = 86400000;
 export const isIndustry = (key: string) => !!VAR_BY_KEY[key]?.industry;
 // loaded on demand: an industry, or a public daily dataset of the same shape (catalog `file`)
 export const isOnDemand = (key: string) => isIndustry(key) || !!VAR_BY_KEY[key]?.file;
-export const industryLoaded = (key: string) => !!loaded.get(key)?.has(BASE_YEAR);
 const fileOf = (key: string, year: number) =>
   (VAR_BY_KEY[key]?.file ?? `/data/industry/${key}.json`).replace('{year}', String(year));
 

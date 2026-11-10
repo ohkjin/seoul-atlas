@@ -3,6 +3,7 @@ import {isTemporal, topVarsOf, type Variable} from '../../data/catalog';
 import type {Place, UhusData} from '../../data/uhus';
 import {fmt} from '../focusValues';
 import type {Grain} from '../layers';
+import {filtersKey} from '../ourFilters';
 import {focusTest, placeSeries} from '../scatter';
 import type {DashCtx} from './Dashboard';
 
@@ -26,7 +27,9 @@ export default function MiniMaps({ctx}: {ctx: DashCtx}) {
   // the day or when a dataset arrives, so those are what the memo watches
   const datasetKeys = Object.keys(datasets || {}).join();
   const series = useMemo(() => placeSeries(datasets, themeVars, grain, filters),
-    [theme, grain, datasetKeys, themeVars.some(isTemporal) ? day : 0]);   // eslint-disable-line react-hooks/exhaustive-deps
+    // (and a table rebuilt with a column or a year it lacked, and the filters, as the graph follows them)
+    [theme, grain, datasetKeys, themeVars.some(isTemporal) ? day : 0, filtersKey(filters),
+      ...['gu_daily', 'dong_daily'].map((id) => `${datasets?.[id]?.fields.length}:${datasets?.[id]?.dataContainer?.numRows()}`)]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   // one layer of 400+ paths per variable, rebuilt only when its values change — the hover
   // and the focus are drawn over it, so neither redraws the maps

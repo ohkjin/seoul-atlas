@@ -187,7 +187,15 @@ export function rowFilter(daily: any, areas: any, keyField: string, filters: any
 
 // One value per day across the whole year for one place (or all of them): rows matched
 // on `keyField` = `code`, combined per day by sum or mean. Ignores the time filter.
-export function seriesByDay(dataset: any, field: string, keyField: string | null, code: string | null, how: 'mean' | 'sum') {
+// The year the weather, the card sales and the study's hot and mild days are for: panels of those read
+// this much of a table, which can hold rows of other years for a variable that has them (Overlay).
+export const STUDY_YEAR: [number, number] = [Date.UTC(2024, 0, 1), Date.UTC(2025, 0, 1)];
+// The one year n days from `start` lie in, or null across more than one
+export function yearOfDays(start: number, n: number): number | null {
+  const a = new Date(start).getUTCFullYear(), b = new Date(start + (n - 1) * 86400000).getUTCFullYear();
+  return a === b ? a : null;
+}
+export function seriesByDay(dataset: any, field: string, keyField: string | null, code: string | null, how: 'mean' | 'sum', within?: [number, number]) {
   const DAY = 86400000;
   if (!dataset) return null;
   const f = dataset.fields.find((x: any) => x.name === field);
@@ -196,12 +204,14 @@ export function seriesByDay(dataset: any, field: string, keyField: string | null
   if (!f || !d) return null;
   const v = numericColumn(dataset, f), t = numericColumn(dataset, d);
   let lo = Infinity, hi = -Infinity;
-  for (let r = 0; r < t.length; r++) { if (t[r] < lo) lo = t[r]; if (t[r] > hi) hi = t[r]; }
+  const out = (x: number) => !!within && (x < within[0] || x >= within[1]);
+  for (let r = 0; r < t.length; r++) { if (out(t[r])) continue; if (t[r] < lo) lo = t[r]; if (t[r] > hi) hi = t[r]; }
+  if (lo > hi) return null;
   const n = Math.round((hi - lo) / DAY) + 1;
   const sum = new Float64Array(n), cnt = new Uint32Array(n);
   const dc = dataset.dataContainer;
   for (let r = 0; r < v.length; r++) {
-    if (code && k >= 0 && String(dc.valueAt(r, k)) !== code) continue;
+    if (out(t[r]) || (code && k >= 0 && String(dc.valueAt(r, k)) !== code)) continue;
     if (!Number.isFinite(v[r])) continue;
     const i = Math.round((t[r] - lo) / DAY);
     sum[i] += v[r]; cnt[i]++;

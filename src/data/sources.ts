@@ -194,7 +194,7 @@ const DEMO_SPAN: Record<string, [string, string]> = {
   livepop: ['2017-01-01', '2026-07-31'],   // OA-14991 from LOCAL_PEOPLE_DONG_2017 (the older method)
 };
 // The Data page's Period line: with ?demo=coverage, the demo span in place of the written one
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthYear = (iso: string) => `${MON[+iso.slice(5, 7) - 1]} ${iso.slice(0, 4)}`;
 export const periodTextOf = (s: DataSource) => {
   const demo = DEMO_COVERAGE ? DEMO_SPAN[s.id] : undefined;

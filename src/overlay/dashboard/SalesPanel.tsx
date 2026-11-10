@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {INDUSTRY_KEYS, SALES_GROUP_KEYS, VAR_BY_KEY, childrenOf} from '../../data/catalog';
 import {industrySeries, isIndustry, loadIndustries} from '../../data/industries';
-import {seriesByDay} from '../focusValues';
+import {STUDY_YEAR, seriesByDay, yearOfDays} from '../focusValues';
 import {niceTicks} from '../scatter';
 import type {DashCtx} from './Dashboard';
 
@@ -25,7 +25,11 @@ type Heat = {ind: string[]; dong: Record<string, number[]>; gu: Record<string, n
 let heatFile: Promise<Heat> | null = null;
 const loadHeat = () => (heatFile ??= fetch('/data/sales_heat.json').then((r) => r.json()));
 
-const nameOf = (key: string) => (VAR_BY_KEY[key]?.short ?? key).replace(/ \(daily\)$/, '');
+// (shared by the panels)
+export const nameOf = (key: string) => (VAR_BY_KEY[key]?.short ?? key).replace(/ \(daily\)$/, '');
+export const mean = (v: number[]) => { const f = v.filter(Number.isFinite); return f.length ? f.reduce((a, b) => a + b, 0) / f.length : NaN; };
+export const median = (v: number[]) => { const f = v.filter(Number.isFinite).sort((a, b) => a - b); return f.length ? f[f.length >> 1] : NaN; };
+export const signed = (x: number, d = 3) => (Number.isFinite(x) ? `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}` : '—');
 const pct = (lr: number) => (Number.isFinite(lr) ? `${lr >= 0 ? '+' : '−'}${Math.abs((Math.exp(lr) - 1) * 100).toFixed(0)}%` : '—');
 const won = (v: number) => (!Number.isFinite(v) ? '—' : v >= 1e9 ? `₩${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `₩${(v / 1e6).toFixed(1)}M` : `₩${Math.round(v / 1e3)}k`);
 const tone = (lr: number) => (!Number.isFinite(lr) ? '' : lr < 0 ? 'fell' : 'rose');
@@ -131,10 +135,10 @@ export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey
   // the years: the selected line and its parts, with the place's heat and mild days
   const model = useMemo(() => {
     if (!table) return null;
-    const hs = seriesByDay(table, 'is_hot', keyField, code, 'mean'), ms = seriesByDay(table, 'is_mild', keyField, code, 'mean');
+    const hs = seriesByDay(table, 'is_hot', keyField, code, 'mean', STUDY_YEAR), ms = seriesByDay(table, 'is_mild', keyField, code, 'mean', STUDY_YEAR);
     if (!hs || !ms) return null;
     const hot = hs.vals.map((v) => v >= 0.5), mild = ms.vals.map((v) => v >= 0.5);
-    const yearOf = (k: string) => (isIndustry(k) ? industrySeries(k, level, code) : seriesByDay(table, k, keyField, code, 'sum')?.vals ?? null);
+    const yearOf = (k: string) => (isIndustry(k) ? industrySeries(k, level, code) : seriesByDay(table, k, keyField, code, 'sum', STUDY_YEAR)?.vals ?? null);
     const meanOf = (v: number[], m: boolean[]) => { let s = 0, c = 0; v.forEach((x, i) => { if (m[i] && Number.isFinite(x)) { s += x; c++; } }); return c ? s / c : NaN; };
     const lineOf = (k: string) => {
       const vals = yearOf(k);
@@ -190,11 +194,12 @@ export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey
   const nHot = model.hot.filter(Boolean).length, nMild = model.mild.filter(Boolean).length;
   const smallH = model.rows.length * (SMALL + GAP) + 10;
   const X = (i: number) => (i / (own.vals.length - 1)) * W;
+  const year = yearOfDays(model.start, own.vals.length);
   return (
     <div className="sales">
       <div className="sp-top">
         <div ref={measure}><svg viewBox={`0 0 ${W} ${BIG}`} width={W} height={BIG} className="sp-svg" role="img"
-          aria-label={`${nameOf(key)} every day of 2024, ${placeName}, heat days shaded`}>
+          aria-label={`${nameOf(key)} every day${year ? ` of ${year}` : ''}, ${placeName}, heat days shaded`}>
           {bigYear}
           {today >= 0 && today < own.vals.length && <line className="sp-today" x1={X(today)} x2={X(today)} y1={0} y2={BIG - 16} />}
           <Months W={W} y={BIG - 2} />
@@ -209,7 +214,7 @@ export default function SalesPanel({ctx, salesKey: key}: {ctx: DashCtx; salesKey
             <span className="mild"><i className="sp-dash mild" />mild day {won(own.mild)}</span>
           </p>
           {words && <p>a typical Seoul neighborhood: <b className={tone(words.typical)}>{pct(words.typical)}</b></p>}
-          <p className="dim">{nHot} heat days · {nMild} mild days in 2024</p>
+          <p className="dim">{nHot} heat days · {nMild} mild days{year ? ` in ${year}` : ''}</p>
         </div>
       </div>
       <div className="sp-sub">{head}</div>

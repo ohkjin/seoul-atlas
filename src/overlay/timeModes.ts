@@ -64,7 +64,7 @@ export const formatDeviation = (x: Variable, d: number) =>
 // and (Aggregate) the place's combined value. Set on each recolour.
 // (placeValues: for points, the dongs' or districts' own combined values — what a place's card reads)
 export type Legend = {colors: string[]; ends: [string, string]; note: string; values?: Map<string, number>; sumUp?: boolean;
-  placeValues?: Map<string, number>};
+  placeValues?: Map<string, number>; over?: (prefix: string) => number | null};
 const legends = new Map<string, Legend>();
 export const legendOf = (layerId: string) => legends.get(layerId);
 // The period combined for the focused place, from a daily table (the time card's value, any layer)
@@ -75,9 +75,25 @@ export function aggregateFor(x: Variable, ds: any, period: Period, combine: Comb
   const code = ds.id.startsWith('dong') ? (focus.level === 'dong' ? focus.dong.code : null) : focus.level !== 'seoul' ? focus.gu.code : null;
   if (code) return values.get(code) ?? null;
   const prefix = focus.level === 'seoul' ? '' : focus.gu.code;
+  if (c === 'max' || c === 'median') { const rows = rowsOf(ds, x.key, period); return rows ? peakOver(x, rows, c, prefix) : null; }
   const vs = [...values].filter(([k, v]) => k.startsWith(prefix) && Number.isFinite(v)).map(([, v]) => v);
   return vs.length ? (isRatio(x) && c !== 'hotmild' ? sum(vs) : mean(vs)) : null;
 }
+// The Max or Median of a district or of Seoul is of its own days — each day's total, or mean, of its
+// places. The sum of each place's own peak would be a day that never happened.
+function peakOver(x: Variable, rows: Rows, c: 'max' | 'median', prefix: string): number | null {
+  const byDay = new Map<number, [number, number]>();
+  for (let i = 0; i < rows.v.length; i++) {
+    if (!rows.code[i].startsWith(prefix)) continue;
+    const a = byDay.get(rows.day[i]) ?? [0, 0];
+    a[0] += rows.v[i]; a[1]++;
+    byDay.set(rows.day[i], a);
+  }
+  const days = [...byDay.values()].map(([s, n]) => (isRatio(x) ? s : s / n)).sort((p, q) => p - q);
+  return days.length ? (c === 'max' ? days[days.length - 1] : days[Math.floor(days.length / 2)]) : null;
+}
+const overOf = (x: Variable, ds: any, period: Period, c: Combine) =>
+  (c === 'max' || c === 'median' ? (prefix: string) => { const rows = rowsOf(ds, x.key, period); return rows ? peakOver(x, rows, c, prefix) : null; } : undefined);
 
 // An aggregate's value for the focused place: its own, or its district's / Seoul's — the sum of its
 // places for a total (a dong code begins with its district's), else their mean.
@@ -89,6 +105,7 @@ export function aggregateAt(layerId: string, focus: Focus): number | null {
     : focus.level === 'gu' ? values.get(focus.gu.code) : undefined;
   if (own != null) return own;
   const prefix = focus.level === 'seoul' ? '' : focus.gu.code;
+  if (lg?.over) return lg.over(prefix);
   const vs = [...values].filter(([c, v]) => c.startsWith(prefix) && Number.isFinite(v)).map(([, v]) => v);
   if (!vs.length) return null;
   return lg?.sumUp ? sum(vs) : mean(vs);
@@ -98,6 +115,23 @@ export function aggregateAt(layerId: string, focus: Focus): number | null {
 const codeFieldOf = (dataId: string) => (dataId.startsWith('pts') ? 'sid' : dataId.startsWith('dong') ? 'dong_code' : 'gu_code');
 const rangeOf = (name: string, colors: string[], colorMap: [string, string][]) =>
   ({name, type: 'custom', category: 'Custom', colors: [...colors, NO_DATA], colorMap});
+// A colour field or palette picked in kepler's panel is the person's: a layer that shows neither
+// of what this module draws it with is left alone, until the card's Value or Combine is changed (a
+// new ask of the card). `fields`: its place code first, then any other it may rightly carry (kepler's
+// own colouring by the variable, which it goes back to when a table is rebuilt). A place code of another
+// table, or no field, is not a choice either: a layer moved between tables, or a station's one teal.
+const askedOf = new Map<string, string>();
+const PLACE_CODES = ['gu_code', 'dong_code', 'sid'];
+function leftToKepler(layer: any, fields: string[], rangeName: string, asked: string) {
+  const newAsk = askedOf.get(layer.id) !== asked;
+  askedOf.set(layer.id, asked);
+  if (newAsk) return false;
+  const field: string | undefined = layer.config.colorField?.name;
+  const theirs = field != null && !fields.includes(field) && !PLACE_CODES.includes(field)
+    || (field === fields[0] && layer.config.visConfig?.colorRange?.name !== rangeName);
+  if (theirs) legends.delete(layer.id);
+  return theirs;
+}
 
 // ── All rows of a daily table inside the period, per field: cached by table and period ─────────
 type Rows = {code: string[]; day: Int32Array; v: Float64Array; hot?: Float64Array; mild?: Float64Array};
@@ -176,6 +210,7 @@ export function recolourTimeline(dispatch: Dispatch, visState: any, view: TimeVi
     if (!x || !ds || !(ds.id === 'gu_daily' || ds.id === 'dong_daily' || ds.id === 'pts_daily')) continue;
     const code = codeFieldOf(ds.id);
     if (layer.id.startsWith('p:')) { recolourPointsTimeline(dispatch, visState, layer, x, ds, view); continue; }
+    if (leftToKepler(layer, [code, x.key], `${x.short} · vs avg`, `${view.value}|${view.base}`)) continue;
     if (view.value === 'actual') {
       legends.delete(layer.id);
       if (layer.config.colorField?.name === x.key) continue;
@@ -268,8 +303,9 @@ export function aggregateConfigFor(x: Variable, areaId: string) {
 }
 
 export const COMBINE_LABEL: Record<Combine, string> = {sum: 'Sum', mean: 'Mean', median: 'Median', max: 'Max', hotmild: 'Hot ÷ Mild'};
-// A level (°C, %) does not add up over days: Sum stands for Mean there.
-export const canSum = (x: Variable) => x.how === 'sum';
+// A level (°C, %) does not add up over days: Sum stands for Mean there. Nor do the people present in
+// a place: they add up over places, but the same people are there the next day.
+export const canSum = (x: Variable) => x.how === 'sum' && !x.key.startsWith('livepop_');
 export const combineFor = (x: Variable, c: Combine): Combine => (c === 'sum' && !canSum(x) ? 'mean' : c);
 
 export function recolourAggregate(dispatch: Dispatch, visState: any, view: TimeView, period: Period, grain: Grain,
@@ -283,6 +319,7 @@ export function recolourAggregate(dispatch: Dispatch, visState: any, view: TimeV
     if (!x || !daily || !areas) continue;
     const code = codeFieldOf(areas.id);
     const combine = combineFor(x, view.combine);
+    if (leftToKepler(layer, [code], `${x.short} · aggregate`, `${view.value}|${combine}`)) continue;
     const values = combineByPlace(x, daily, period, combine);
     const vs = [...values.values()];
     let colors: string[], stepFor: (v: number) => number, ends: [string, string], note: string;
@@ -310,7 +347,7 @@ export function recolourAggregate(dispatch: Dispatch, visState: any, view: TimeV
       const v = values.get(c);
       return [c, v == null || !Number.isFinite(v) ? NO_DATA : colors[stepFor(v)] ?? NO_DATA];
     });
-    legends.set(layer.id, {colors, ends, note, values, sumUp: isRatio(x) && combine !== 'hotmild'});
+    legends.set(layer.id, {colors, ends, note, values, sumUp: isRatio(x) && combine !== 'hotmild', over: overOf(x, daily, period, combine)});
     applyColorMap(dispatch, layer, areas, code, rangeOf(`${x.short} · aggregate`, colors, colorMap));
   }
 }
@@ -322,12 +359,14 @@ function recolourPointsAggregate(dispatch: Dispatch, visState: any, view: TimeVi
     const x = VAR_BY_KEY[layer.id.slice(2)];
     const ds = visState.datasets.pts_sized;
     if (!x || !ds) continue;
+    if (leftToKepler(layer, ['sid'], `${x.short} · vs avg`, `agg|${view.value}|${view.combine}`)) continue;
     const values = valuesByPlace(ds, x.key, 'sid');
     // the places' own totals for the cards: every station counted, not only the sized ones
     const daily = visState.datasets[grain === 'dong' && visState.datasets.dong_daily ? 'dong_daily' : 'gu_daily'];
     const placeValues = daily ? combineByPlace(x, daily, period, combineFor(x, view.combine)) : undefined;
     const sumUp = isRatio(x) && view.combine !== 'hotmild';
-    if (view.value === 'actual') { legends.set(layer.id, {colors: [], ends: ['', ''], note: COMBINE_LABEL[combineFor(x, view.combine)], values, placeValues, sumUp}); plainPoints(dispatch, layer); continue; }
+    const over = daily ? overOf(x, daily, period, combineFor(x, view.combine)) : undefined;
+    if (view.value === 'actual') { legends.set(layer.id, {colors: [], ends: ['', ''], note: COMBINE_LABEL[combineFor(x, view.combine)], values, placeValues, sumUp, over}); plainPoints(dispatch, layer); continue; }
     // vs its avg: the period's usual day against the station's own usual day over the year
     // (summer against its year, say) — the circle stays the period's value
     const usual = valuesByPlace(ds, 'usual', 'sid'), year = valuesByPlace(ds, 'year_usual', 'sid');
@@ -338,7 +377,7 @@ function recolourPointsAggregate(dispatch: Dispatch, visState: any, view: TimeVi
       return [c, Number.isFinite(d) ? colors[stepOf(d, OWN_AVG_EDGES)] : NO_DATA];
     });
     void scope;
-    legends.set(layer.id, {colors, ends: ['×0.5', '×2'], note: 'vs its own year', values, placeValues, sumUp});
+    legends.set(layer.id, {colors, ends: ['×0.5', '×2'], note: 'vs its own year', values, placeValues, sumUp, over});
     applyColorMap(dispatch, layer, ds, 'sid', rangeOf(`${x.short} · vs avg`, colors, colorMap));
   }
 }
@@ -347,6 +386,7 @@ function recolourPointsAggregate(dispatch: Dispatch, visState: any, view: TimeVi
 // against it — below half dark, about usual grey, above double bright (mockups/time-modes/basis.png C).
 // Against the other stations instead, a big station is always "above": the colour only repeated the size.
 function recolourPointsTimeline(dispatch: Dispatch, visState: any, layer: any, x: Variable, ds: any, view: TimeView) {
+  if (leftToKepler(layer, ['sid'], `${x.short} · vs its avg`, `timeline|${view.value}`)) return;
   if (view.value === 'actual') {
     legends.delete(layer.id);
     sizeBy(dispatch, layer, ds, x.key);
